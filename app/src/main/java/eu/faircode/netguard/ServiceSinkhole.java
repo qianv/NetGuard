@@ -106,6 +106,13 @@ import javax.net.ssl.HttpsURLConnection;
 public class ServiceSinkhole extends VpnService implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = "NetGuard.Service";
 
+    private boolean registeredInteractiveState = false;
+    private boolean registeredPowerSave = false;
+    private boolean registeredUser = false;
+    private boolean registeredIdleState = false;
+    private boolean registeredConnectivityChanged = false;
+    private boolean registeredPackageAdded = false;
+
     private State state = State.none;
     private boolean user_foreground = true;
     private boolean last_connected = false;
@@ -952,6 +959,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
     private Builder getBuilder(List<Rule> listAllowed, List<Rule> listRule) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean subnet = prefs.getBoolean("subnet", false);
         boolean tethering = prefs.getBoolean("tethering", false);
         boolean lan = prefs.getBoolean("lan", false);
         boolean ip6 = prefs.getBoolean("ip6", true);
@@ -981,68 +989,72 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
                 }
             }
 
-        // Exclude IP ranges
-        List<IPUtil.CIDR> listExclude = new ArrayList<>();
-        listExclude.add(new IPUtil.CIDR("127.0.0.0", 8)); // localhost
+        // Subnet routing
+        if (subnet) {
+            // Exclude IP ranges
+            List<IPUtil.CIDR> listExclude = new ArrayList<>();
+            listExclude.add(new IPUtil.CIDR("127.0.0.0", 8)); // localhost
 
-        if (tethering) {
-            // USB Tethering 192.168.42.x
-            // Wi-Fi Tethering 192.168.43.x
-            listExclude.add(new IPUtil.CIDR("192.168.42.0", 23));
-        }
-
-        if (lan) {
-            try {
-                Enumeration<NetworkInterface> nis = NetworkInterface.getNetworkInterfaces();
-                while (nis.hasMoreElements()) {
-                    NetworkInterface ni = nis.nextElement();
-                    if (ni != null && ni.isUp() && !ni.isLoopback() &&
-                            ni.getName() != null && !ni.getName().startsWith("tun"))
-                        for (InterfaceAddress ia : ni.getInterfaceAddresses())
-                            if (ia.getAddress() instanceof Inet4Address) {
-                                IPUtil.CIDR local = new IPUtil.CIDR(ia.getAddress(), ia.getNetworkPrefixLength());
-                                Log.i(TAG, "Excluding " + ni.getName() + " " + local);
-                                listExclude.add(local);
-                            }
-                }
-            } catch (SocketException ex) {
-                Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
+            if (tethering) {
+                // USB Tethering 192.168.42.x
+                // Wi-Fi Tethering 192.168.43.x
+                listExclude.add(new IPUtil.CIDR("192.168.42.0", 23));
             }
-        }
 
-        Configuration config = getResources().getConfiguration();
-        if (config.mcc == 310 && config.mnc == 260) {
-            // T-Mobile Wi-Fi calling
-            listExclude.add(new IPUtil.CIDR("66.94.2.0", 24));
-            listExclude.add(new IPUtil.CIDR("66.94.6.0", 23));
-            listExclude.add(new IPUtil.CIDR("66.94.8.0", 22));
-            listExclude.add(new IPUtil.CIDR("208.54.0.0", 16));
-        }
-        listExclude.add(new IPUtil.CIDR("224.0.0.0", 3)); // broadcast
+            if (lan) {
+                try {
+                    Enumeration<NetworkInterface> nis = NetworkInterface.getNetworkInterfaces();
+                    while (nis.hasMoreElements()) {
+                        NetworkInterface ni = nis.nextElement();
+                        if (ni != null && ni.isUp() && !ni.isLoopback() &&
+                                ni.getName() != null && !ni.getName().startsWith("tun"))
+                            for (InterfaceAddress ia : ni.getInterfaceAddresses())
+                                if (ia.getAddress() instanceof Inet4Address) {
+                                    IPUtil.CIDR local = new IPUtil.CIDR(ia.getAddress(), ia.getNetworkPrefixLength());
+                                    Log.i(TAG, "Excluding " + ni.getName() + " " + local);
+                                    listExclude.add(local);
+                                }
+                    }
+                } catch (SocketException ex) {
+                    Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
+                }
+            }
 
-        Collections.sort(listExclude);
+            Configuration config = getResources().getConfiguration();
+            if (config.mcc == 310 && config.mnc == 260) {
+                // T-Mobile Wi-Fi calling
+                listExclude.add(new IPUtil.CIDR("66.94.2.0", 24));
+                listExclude.add(new IPUtil.CIDR("66.94.6.0", 23));
+                listExclude.add(new IPUtil.CIDR("66.94.8.0", 22));
+                listExclude.add(new IPUtil.CIDR("208.54.0.0", 16));
+            }
+            listExclude.add(new IPUtil.CIDR("224.0.0.0", 3)); // broadcast
 
-        try {
-            InetAddress start = InetAddress.getByName("0.0.0.0");
-            for (IPUtil.CIDR exclude : listExclude) {
-                Log.i(TAG, "Exclude " + exclude.getStart().getHostAddress() + "..." + exclude.getEnd().getHostAddress());
-                for (IPUtil.CIDR include : IPUtil.toCIDR(start, IPUtil.minus1(exclude.getStart())))
+            Collections.sort(listExclude);
+
+            try {
+                InetAddress start = InetAddress.getByName("0.0.0.0");
+                for (IPUtil.CIDR exclude : listExclude) {
+                    Log.i(TAG, "Exclude " + exclude.getStart().getHostAddress() + "..." + exclude.getEnd().getHostAddress());
+                    for (IPUtil.CIDR include : IPUtil.toCIDR(start, IPUtil.minus1(exclude.getStart())))
+                        try {
+                            builder.addRoute(include.address, include.prefix);
+                        } catch (Throwable ex) {
+                            Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
+                        }
+                    start = IPUtil.plus1(exclude.getEnd());
+                }
+                for (IPUtil.CIDR include : IPUtil.toCIDR("224.0.0.0", "255.255.255.255"))
                     try {
                         builder.addRoute(include.address, include.prefix);
                     } catch (Throwable ex) {
                         Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
                     }
-                start = IPUtil.plus1(exclude.getEnd());
+            } catch (UnknownHostException ex) {
+                Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
             }
-            for (IPUtil.CIDR include : IPUtil.toCIDR("224.0.0.0", "255.255.255.255"))
-                try {
-                    builder.addRoute(include.address, include.prefix);
-                } catch (Throwable ex) {
-                    Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                }
-        } catch (UnknownHostException ex) {
-            Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-        }
+        } else
+            builder.addRoute("0.0.0.0", 0);
 
         Log.i(TAG, "IPv6=" + ip6);
         if (ip6)
@@ -1604,6 +1616,16 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         }
     };
 
+    private BroadcastReceiver packageAddedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.i(TAG, "Received " + intent);
+            Util.logExtras(intent);
+            Rule.clearCache(ServiceSinkhole.this);
+            reload("package added", ServiceSinkhole.this);
+        }
+    };
+
     private PhoneStateListener phoneStateListener = new PhoneStateListener() {
         private String last_generation = null;
         private int last_international = -1;
@@ -1645,16 +1667,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         }
     };
 
-    private BroadcastReceiver packageAddedReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Log.i(TAG, "Received " + intent);
-            Util.logExtras(intent);
-            Rule.clearCache(ServiceSinkhole.this);
-            reload("package added", ServiceSinkhole.this);
-        }
-    };
-
     @Override
     public void onCreate() {
         Log.i(TAG, "Create version=" + Util.getSelfVersionName(this) + "/" + Util.getSelfVersionCode(this));
@@ -1693,6 +1705,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         ifInteractive.addAction(Intent.ACTION_SCREEN_OFF);
         ifInteractive.addAction(ACTION_SCREEN_OFF_DELAYED);
         registerReceiver(interactiveStateReceiver, ifInteractive);
+        registeredInteractiveState = true;
 
         // Listen for power save mode
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Util.isPlayStoreInstall(this)) {
@@ -1701,6 +1714,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
             IntentFilter ifPower = new IntentFilter();
             ifPower.addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED);
             registerReceiver(powerSaveReceiver, ifPower);
+            registeredPowerSave = true;
         }
 
         // Listen for user switches
@@ -1709,6 +1723,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
             ifUser.addAction(Intent.ACTION_USER_BACKGROUND);
             ifUser.addAction(Intent.ACTION_USER_FOREGROUND);
             registerReceiver(userReceiver, ifUser);
+            registeredUser = true;
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -1716,18 +1731,21 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
             IntentFilter ifIdle = new IntentFilter();
             ifIdle.addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED);
             registerReceiver(idleStateReceiver, ifIdle);
+            registeredIdleState = true;
         }
 
         // Listen for connectivity updates
         IntentFilter ifConnectivity = new IntentFilter();
         ifConnectivity.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
         registerReceiver(connectivityChangedReceiver, ifConnectivity);
+        registeredConnectivityChanged = true;
 
         // Listen for added applications
         IntentFilter ifPackage = new IntentFilter();
         ifPackage.addAction(Intent.ACTION_PACKAGE_ADDED);
         ifPackage.addDataScheme("package");
         registerReceiver(packageAddedReceiver, ifPackage);
+        registeredPackageAdded = true;
 
         // Setup house holding
         Intent alarmIntent = new Intent(this, ServiceSinkhole.class);
@@ -1845,15 +1863,30 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         logLooper.quit();
         statsLooper.quit();
 
-        unregisterReceiver(interactiveStateReceiver);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        if (registeredInteractiveState) {
+            unregisterReceiver(interactiveStateReceiver);
+            registeredInteractiveState = false;
+        }
+        if (registeredPowerSave) {
             unregisterReceiver(powerSaveReceiver);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1)
+            registeredPowerSave = false;
+        }
+        if (registeredUser) {
             unregisterReceiver(userReceiver);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            registeredUser = false;
+        }
+        if (registeredIdleState) {
             unregisterReceiver(idleStateReceiver);
-        unregisterReceiver(connectivityChangedReceiver);
-        unregisterReceiver(packageAddedReceiver);
+            registeredIdleState = false;
+        }
+        if (registeredConnectivityChanged) {
+            unregisterReceiver(connectivityChangedReceiver);
+            registeredConnectivityChanged = false;
+        }
+        if (registeredPackageAdded) {
+            unregisterReceiver(packageAddedReceiver);
+            registeredPackageAdded = false;
+        }
 
         if (phone_state) {
             TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
