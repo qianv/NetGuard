@@ -30,7 +30,6 @@ Features:
 &bull; 100% open source
 &bull; No calling home
 &bull; No tracking or analytics
-&bull; No advertisements
 &bull; Actively developed and supported
 &bull; Android 4.0 and later supported
 &bull; IPv4/IPv6 TCP/UDP supported
@@ -59,6 +58,6 @@ If you like to help people less fluent in English, you can help translate NetGua
 
 If you like to test new features, you can participate in the test program: https://play.google.com/apps/testing/eu.faircode.netguard
 
-All required permissions are described here: https://github.com/M66B/NetGuard
+All required permissions are described here: https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ42
 
 The source code is available here: https://github.com/M66B/NetGuard

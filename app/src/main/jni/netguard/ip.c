@@ -35,10 +35,11 @@ uint16_t get_default_mss(int version) {
 }
 
 int check_tun(const struct arguments *args,
-              fd_set *rfds, fd_set *wfds, fd_set *efds,
+              const struct epoll_event *ev,
+              const int epoll_fd,
               int sessions, int maxsessions) {
     // Check tun error
-    if (FD_ISSET(args->tun, efds)) {
+    if (ev->events & EPOLLERR) {
         log_android(ANDROID_LOG_ERROR, "tun %d exception", args->tun);
         if (fcntl(args->tun, F_GETFL) < 0) {
             log_android(ANDROID_LOG_ERROR, "fcntl tun %d F_GETFL error %d: %s",
@@ -51,7 +52,7 @@ int check_tun(const struct arguments *args,
     }
 
     // Check tun read
-    if (FD_ISSET(args->tun, rfds)) {
+    if (ev->events & EPOLLIN) {
         uint8_t *buffer = malloc(get_mtu());
         ssize_t length = read(args->tun, buffer, get_mtu());
         if (length < 0) {
@@ -79,7 +80,7 @@ int check_tun(const struct arguments *args,
             }
 
             // Handle IP from tun
-            handle_ip(args, buffer, (size_t) length, sessions, maxsessions);
+            handle_ip(args, buffer, (size_t) length, epoll_fd, sessions, maxsessions);
 
             free(buffer);
         }
@@ -119,6 +120,7 @@ int is_upper_layer(int protocol) {
 
 void handle_ip(const struct arguments *args,
                const uint8_t *pkt, const size_t length,
+               const int epoll_fd,
                int sessions, int maxsessions) {
     uint8_t protocol;
     void *saddr;
@@ -128,12 +130,6 @@ void handle_ip(const struct arguments *args,
     char flags[10];
     int flen = 0;
     uint8_t *payload;
-
-#ifdef PROFILE_EVENTS
-    float mselapsed;
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-#endif
 
     // Get protocol, addresses & payload
     uint8_t version = (*pkt) >> 4;
@@ -150,9 +146,9 @@ void handle_ip(const struct arguments *args,
         daddr = &ip4hdr->daddr;
 
         if (ip4hdr->frag_off & IP_MF) {
-            log_android(ANDROID_LOG_ERROR, "IP fragment offset %u", ip4hdr->frag_off & IP_OFFMASK);
-            flags[flen++] = '+';
-            report_error(args, 2, "TCP fragmentation");
+            log_android(ANDROID_LOG_ERROR, "IP fragment offset %u",
+                        (ip4hdr->frag_off & IP_OFFMASK) * 8);
+            return;
         }
 
         uint8_t ipoptlen = (uint8_t) ((ip4hdr->ihl - 5) * 4);
@@ -268,9 +264,6 @@ void handle_ip(const struct arguments *args,
         if (tcp->rst)
             flags[flen++] = 'R';
 
-        if (tcp->urg)
-            report_error(args, 3, "TCP out of band data");
-
         // TODO checksum
     }
     else if (protocol != IPPROTO_HOPOPTS && protocol != IPPROTO_IGMP && protocol != IPPROTO_ESP)
@@ -301,14 +294,6 @@ void handle_ip(const struct arguments *args,
                 "Packet v%d %s/%u > %s/%u proto %d flags %s uid %d",
                 version, source, sport, dest, dport, protocol, flags, uid);
 
-#ifdef PROFILE_EVENTS
-    gettimeofday(&end, NULL);
-    mselapsed = (end.tv_sec - start.tv_sec) * 1000.0 +
-                (end.tv_usec - start.tv_usec) / 1000.0;
-    if (mselapsed > PROFILE_EVENTS)
-        log_android(ANDROID_LOG_WARN, "handle ip %f", mselapsed);
-#endif
-
     // Check if allowed
     int allowed = 0;
     struct allowed *redirect = NULL;
@@ -328,11 +313,11 @@ void handle_ip(const struct arguments *args,
     // Handle allowed traffic
     if (allowed) {
         if (protocol == IPPROTO_ICMP || protocol == IPPROTO_ICMPV6)
-            handle_icmp(args, pkt, length, payload, uid);
+            handle_icmp(args, pkt, length, payload, uid, epoll_fd);
         else if (protocol == IPPROTO_UDP)
-            handle_udp(args, pkt, length, payload, uid, redirect);
+            handle_udp(args, pkt, length, payload, uid, redirect, epoll_fd);
         else if (protocol == IPPROTO_TCP)
-            handle_tcp(args, pkt, length, payload, uid, redirect);
+            handle_tcp(args, pkt, length, payload, uid, redirect, epoll_fd);
     }
     else {
         if (protocol == IPPROTO_UDP)
@@ -340,14 +325,6 @@ void handle_ip(const struct arguments *args,
         log_android(ANDROID_LOG_WARN, "Address v%d p%d %s/%u syn %d not allowed",
                     version, protocol, dest, dport, syn);
     }
-
-#ifdef PROFILE_EVENTS
-    gettimeofday(&end, NULL);
-    mselapsed = (end.tv_sec - start.tv_sec) * 1000.0 +
-                (end.tv_usec - start.tv_usec) / 1000.0;
-    if (mselapsed > PROFILE_EVENTS)
-        log_android(ANDROID_LOG_WARN, "handle protocol %f", mselapsed);
-#endif
 }
 
 jint get_uid_retry(const int version, const int protocol,

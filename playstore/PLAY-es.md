@@ -8,7 +8,7 @@ NetGuard - cortafuegos sin root
 
 Short description
 -----------------
-Una simple forma de bloquear el acceso a Internet por aplicación
+Una forma simple de bloquear el acceso a Internet por aplicación
 
 
 Long description
@@ -30,7 +30,6 @@ Características:
 &bull; 100% código abierto
 &bull; No calling home
 &bull; Sin seguimiento o análisis integrado
-&bull; Sin publicidad
 &bull; Desarrollado y soportado activamente
 &bull; Soporta Android 4.0 o superior
 &bull; Soporta IPv4/IPv6, TCP/UDP
@@ -59,6 +58,6 @@ Si te gusta ayudar a personas con menor fluidez de Inglés, puedes ayudar a trad
 
 Si te gusta probar las nuevas características, puedes participar en el programa de prueba: https://play.google.com/apps/testing/eu.faircode.netguard
 
-Todos los permisos requeridos se detallan aquí: https://github.com/M66B/NetGuard#permissions
+Todos los permisos requeridos se detallan aquí: https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ42
 
 El código fuente está disponible aquí: https://github.com/M66B/NetGuard

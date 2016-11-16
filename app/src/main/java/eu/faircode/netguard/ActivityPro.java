@@ -47,12 +47,24 @@ public class ActivityPro extends AppCompatActivity {
 
     // adb shell pm clear com.android.vending
     // android.test.purchased
+
+    private static final int SKU_LOG_ID = 1;
+    private static final int SKU_FILTER_ID = 2;
+    private static final int SKU_NOTIFY_ID = 3;
+    private static final int SKU_SPEED_ID = 4;
+    private static final int SKU_THEME_ID = 5;
+    private static final int SKU_PRO1_ID = 6;
+    private static final int SKU_SUPPORT1_ID = 7;
+    private static final int SKU_SUPPORT2_ID = 8;
+
     public static final String SKU_LOG = "log";
     public static final String SKU_FILTER = "filter";
     public static final String SKU_NOTIFY = "notify";
     public static final String SKU_SPEED = "speed";
     public static final String SKU_THEME = "theme";
     public static final String SKU_PRO1 = "pro1";
+    public static final String SKU_SUPPORT1 = "support1";
+    public static final String SKU_SUPPORT2 = "support2";
     public static final String SKU_DONATION = "donation";
 
     @Override
@@ -76,6 +88,8 @@ public class ActivityPro extends AppCompatActivity {
         TextView tvSpeedTitle = (TextView) findViewById(R.id.tvSpeedTitle);
         TextView tvThemeTitle = (TextView) findViewById(R.id.tvThemeTitle);
         TextView tvAllTitle = (TextView) findViewById(R.id.tvAllTitle);
+        TextView tvDev1Title = (TextView) findViewById(R.id.tvDev1Title);
+        TextView tvDev2Title = (TextView) findViewById(R.id.tvDev2Title);
 
         Linkify.TransformFilter filter = new Linkify.TransformFilter() {
             @Override
@@ -90,6 +104,8 @@ public class ActivityPro extends AppCompatActivity {
         Linkify.addLinks(tvSpeedTitle, Pattern.compile(".*"), "http://www.netguard.me/#" + SKU_SPEED, null, filter);
         Linkify.addLinks(tvThemeTitle, Pattern.compile(".*"), "http://www.netguard.me/#" + SKU_THEME, null, filter);
         Linkify.addLinks(tvAllTitle, Pattern.compile(".*"), "http://www.netguard.me/#" + SKU_PRO1, null, filter);
+        Linkify.addLinks(tvDev1Title, Pattern.compile(".*"), "http://www.netguard.me/#" + SKU_SUPPORT1, null, filter);
+        Linkify.addLinks(tvDev2Title, Pattern.compile(".*"), "http://www.netguard.me/#" + SKU_SUPPORT2, null, filter);
 
         // Challenge
         TextView tvChallenge = (TextView) findViewById(R.id.tvChallenge);
@@ -97,7 +113,7 @@ public class ActivityPro extends AppCompatActivity {
 
         // Response
         try {
-            final String response = Util.md5(Build.SERIAL, "NetGuard");
+            final String response = Util.md5(Build.SERIAL, "NetGuard2");
             EditText etResponse = (EditText) findViewById(R.id.etResponse);
             etResponse.addTextChangedListener(new TextWatcher() {
                 @Override
@@ -137,30 +153,45 @@ public class ActivityPro extends AppCompatActivity {
                         final Button btnSpeed = (Button) findViewById(R.id.btnSpeed);
                         final Button btnTheme = (Button) findViewById(R.id.btnTheme);
                         final Button btnAll = (Button) findViewById(R.id.btnAll);
+                        final Button btnDev1 = (Button) findViewById(R.id.btnDev1);
+                        final Button btnDev2 = (Button) findViewById(R.id.btnDev2);
 
                         View.OnClickListener listener = new View.OnClickListener() {
                             @Override
                             public void onClick(View view) {
                                 try {
+                                    int id = 0;
                                     PendingIntent pi = null;
-                                    if (view == btnLog)
-                                        pi = iab.getBuyIntent(SKU_LOG);
-                                    else if (view == btnFilter)
-                                        pi = iab.getBuyIntent(SKU_FILTER);
-                                    else if (view == btnNotify)
-                                        pi = iab.getBuyIntent(SKU_NOTIFY);
-                                    else if (view == btnSpeed)
-                                        pi = iab.getBuyIntent(SKU_SPEED);
-                                    else if (view == btnTheme)
-                                        pi = iab.getBuyIntent(SKU_THEME);
-                                    else if (view == btnAll)
-                                        pi = iab.getBuyIntent(SKU_PRO1);
+                                    if (view == btnLog) {
+                                        id = SKU_LOG_ID;
+                                        pi = iab.getBuyIntent(SKU_LOG, false);
+                                    } else if (view == btnFilter) {
+                                        id = SKU_FILTER_ID;
+                                        pi = iab.getBuyIntent(SKU_FILTER, false);
+                                    } else if (view == btnNotify) {
+                                        id = SKU_NOTIFY_ID;
+                                        pi = iab.getBuyIntent(SKU_NOTIFY, false);
+                                    } else if (view == btnSpeed) {
+                                        id = SKU_SPEED_ID;
+                                        pi = iab.getBuyIntent(SKU_SPEED, false);
+                                    } else if (view == btnTheme) {
+                                        id = SKU_THEME_ID;
+                                        pi = iab.getBuyIntent(SKU_THEME, false);
+                                    } else if (view == btnAll) {
+                                        id = SKU_PRO1_ID;
+                                        pi = iab.getBuyIntent(SKU_PRO1, false);
+                                    } else if (view == btnDev1) {
+                                        id = SKU_SUPPORT1_ID;
+                                        pi = iab.getBuyIntent(SKU_SUPPORT1, true);
+                                    } else if (view == btnDev2) {
+                                        id = SKU_SUPPORT2_ID;
+                                        pi = iab.getBuyIntent(SKU_SUPPORT2, true);
+                                    }
 
-                                    if (pi != null)
-                                        startIntentSenderForResult(pi.getIntentSender(), view.getId(), new Intent(), 0, 0, 0);
+                                    if (id > 0 && pi != null)
+                                        startIntentSenderForResult(pi.getIntentSender(), id, new Intent(), 0, 0, 0);
                                 } catch (Throwable ex) {
                                     Log.i(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                                    Util.sendCrashReport(ex, ActivityPro.this);
                                 }
                             }
                         };
@@ -171,6 +202,8 @@ public class ActivityPro extends AppCompatActivity {
                         btnSpeed.setOnClickListener(listener);
                         btnTheme.setOnClickListener(listener);
                         btnAll.setOnClickListener(listener);
+                        btnDev1.setOnClickListener(listener);
+                        btnDev2.setOnClickListener(listener);
 
                         btnLog.setEnabled(true);
                         btnFilter.setEnabled(true);
@@ -178,6 +211,8 @@ public class ActivityPro extends AppCompatActivity {
                         btnSpeed.setEnabled(true);
                         btnTheme.setEnabled(true);
                         btnAll.setEnabled(true);
+                        btnDev1.setEnabled(true);
+                        btnDev2.setEnabled(true);
 
                     } catch (Throwable ex) {
                         Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
@@ -194,6 +229,7 @@ public class ActivityPro extends AppCompatActivity {
     protected void onDestroy() {
         Log.i(TAG, "Destroy");
         iab.unbind();
+        iab = null;
         super.onDestroy();
     }
 
@@ -213,28 +249,36 @@ public class ActivityPro extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
-                case R.id.btnLog:
+                case SKU_LOG_ID:
                     IAB.setBought(SKU_LOG, this);
                     updateState();
                     break;
-                case R.id.btnFilter:
+                case SKU_FILTER_ID:
                     IAB.setBought(SKU_FILTER, this);
                     updateState();
                     break;
-                case R.id.btnNotify:
+                case SKU_NOTIFY_ID:
                     IAB.setBought(SKU_NOTIFY, this);
                     updateState();
                     break;
-                case R.id.btnSpeed:
+                case SKU_SPEED_ID:
                     IAB.setBought(SKU_SPEED, this);
                     updateState();
                     break;
-                case R.id.btnTheme:
+                case SKU_THEME_ID:
                     IAB.setBought(SKU_THEME, this);
                     updateState();
                     break;
-                case R.id.btnAll:
+                case SKU_PRO1_ID:
                     IAB.setBought(SKU_PRO1, this);
+                    updateState();
+                    break;
+                case SKU_SUPPORT1_ID:
+                    IAB.setBought(SKU_SUPPORT1, this);
+                    updateState();
+                    break;
+                case SKU_SUPPORT2_ID:
+                    IAB.setBought(SKU_SUPPORT2, this);
                     updateState();
                     break;
             }
@@ -248,12 +292,16 @@ public class ActivityPro extends AppCompatActivity {
         Button btnSpeed = (Button) findViewById(R.id.btnSpeed);
         Button btnTheme = (Button) findViewById(R.id.btnTheme);
         Button btnAll = (Button) findViewById(R.id.btnAll);
+        Button btnDev1 = (Button) findViewById(R.id.btnDev1);
+        Button btnDev2 = (Button) findViewById(R.id.btnDev2);
         TextView tvLog = (TextView) findViewById(R.id.tvLog);
         TextView tvFilter = (TextView) findViewById(R.id.tvFilter);
         TextView tvNotify = (TextView) findViewById(R.id.tvNotify);
         TextView tvSpeed = (TextView) findViewById(R.id.tvSpeed);
         TextView tvTheme = (TextView) findViewById(R.id.tvTheme);
         TextView tvAll = (TextView) findViewById(R.id.tvAll);
+        TextView tvDev1 = (TextView) findViewById(R.id.tvDev1);
+        TextView tvDev2 = (TextView) findViewById(R.id.tvDev2);
         LinearLayout llChallenge = (LinearLayout) findViewById(R.id.llChallenge);
 
         btnLog.setVisibility(IAB.isPurchased(SKU_LOG, this) ? View.GONE : View.VISIBLE);
@@ -262,6 +310,8 @@ public class ActivityPro extends AppCompatActivity {
         btnSpeed.setVisibility(IAB.isPurchased(SKU_SPEED, this) ? View.GONE : View.VISIBLE);
         btnTheme.setVisibility(IAB.isPurchased(SKU_THEME, this) ? View.GONE : View.VISIBLE);
         btnAll.setVisibility(IAB.isPurchased(SKU_PRO1, this) ? View.GONE : View.VISIBLE);
+        btnDev1.setVisibility(IAB.isPurchased(SKU_SUPPORT1, this) ? View.GONE : View.VISIBLE);
+        btnDev2.setVisibility(IAB.isPurchased(SKU_SUPPORT2, this) ? View.GONE : View.VISIBLE);
 
         tvLog.setVisibility(IAB.isPurchased(SKU_LOG, this) ? View.VISIBLE : View.GONE);
         tvFilter.setVisibility(IAB.isPurchased(SKU_FILTER, this) ? View.VISIBLE : View.GONE);
@@ -269,6 +319,8 @@ public class ActivityPro extends AppCompatActivity {
         tvSpeed.setVisibility(IAB.isPurchased(SKU_SPEED, this) ? View.VISIBLE : View.GONE);
         tvTheme.setVisibility(IAB.isPurchased(SKU_THEME, this) ? View.VISIBLE : View.GONE);
         tvAll.setVisibility(IAB.isPurchased(SKU_PRO1, this) ? View.VISIBLE : View.GONE);
+        tvDev1.setVisibility(IAB.isPurchased(SKU_SUPPORT1, this) ? View.VISIBLE : View.GONE);
+        tvDev2.setVisibility(IAB.isPurchased(SKU_SUPPORT2, this) ? View.VISIBLE : View.GONE);
 
         llChallenge.setVisibility(
                 IAB.isPurchased(SKU_DONATION, this) || Util.isPlayStoreInstall(this)

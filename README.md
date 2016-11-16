@@ -18,7 +18,6 @@ Features:
 * 100% open source
 * No calling home
 * No tracking or analytics
-* No advertisements
 * Actively developed and supported
 * Android 4.0 and later supported
 * IPv4/IPv6 TCP/UDP supported
@@ -63,7 +62,7 @@ Usage:
 You can use the settings menu to change from blacklist mode (allow all in *Settings* but block unwanted applications in list) to whitelist mode (block all in *Settings* but allow favorite applications in list).
 
 * Red/orange/yellow/amber = internet access denied
-* Teal/blue/purple/grey = internet access allowd
+* Teal/blue/purple/grey = internet access allowed
 
 <img src="https://raw.githubusercontent.com/M66B/NetGuard/master/screenshots/01-main.png" width="320" height="569" />
 <img src="https://raw.githubusercontent.com/M66B/NetGuard/master/screenshots/02-main-details.png" width="320" height="569" />
@@ -75,7 +74,7 @@ For more screenshots, see [here](https://github.com/M66B/NetGuard/tree/master/sc
 Compatibility
 -------------
 
-NetGuard will crash when the package *com.android.vpndialogs* has been removed or otherwise is unavailable.
+NetGuard will not work or crash when the package *com.android.vpndialogs* has been removed or otherwise is unavailable.
 
 
 <a name="FAQ"></a>
@@ -131,7 +130,7 @@ Frequently Asked Questions (FAQ)
 [**(18) Why can't I find NetGuard in the Google Play™ store app?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ18)
 
 <a name="FAQ19"></a>
-[**(19) Why does aplication XYZ still have internet access?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ19)
+[**(19) Why does application XYZ still have internet access?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ19)
 
 <a name="FAQ20"></a>
 [**(20) Can I Greenify/hibernate NetGuard?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ20)
@@ -181,25 +180,43 @@ Frequently Asked Questions (FAQ)
 <a name="FAQ37"></a>
 [**(37) Why are the pro features so expensive?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ37)
 
-Permissions
------------
+<a name="FAQ38"></a>
+[**(38) Why did NetGuard stop running?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ38)
 
-* INTERNET ('*Full network access*'): to forward allowed (filtered) traffic to the internet
-* ACCESS_NETWORK_STATE ('*View network connections*'): to check if the device is connected to the internet through Wi-Fi
-* READ_PHONE_STATE ('*Device ID & call information*'): to detect mobile network changes, see [here](http://forum.xda-developers.com/showpost.php?p=64107371&postcount=489) for more details
-* ACCESS_WIFI_STATE ('*Wi-Fi connection information*'): to detect Wi-Fi network changes
-* RECEIVE_BOOT_COMPLETED ('*Run at startup*'): to start the firewall when booting the device
-* WAKE_LOCK ('*Prevent device from sleeping*'): to reliably reload rules in the background on connectivity changes
-* READ/WRITE_EXTERNAL_STORAGE ('*Photos/Media/Files*'): to export/import settings on Android versions before 5.0 (Lollipop) (there is no need to grant this permission on later Android versions)
-* com.android.vending.BILLING: to use in-app billing
+<a name="FAQ39"></a>
+[**(39) How does a VPN based firewall differ from a iptables based firewall?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ39)
+
+<a name="FAQ40"></a>
+[**(40) Can you add schedules?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ40)
+
+<a name="FAQ41"></a>
+[**(41) Can you add wildcards?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ41)
+
+<a name="FAQ42"></a>
+[**(42) Why is permission ... needed?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ42)
+
+<a name="FAQ43"></a>
+[**(43) I get 'This app is causing your device to run slowly'**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ43)
+
+<a name="FAQ44"></a>
+[**(44) I don't get notifications on access**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ44)
+
+<a name="FAQ45"></a>
+[**(45) Does NetGuard handle incoming connections?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ45)
+
+<a name="FAQ46"></a>
+[**(46) Can I get a refund?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ46)
+
+<a name="FAQ47"></a>
+[**(47) Why are there in application advertisements?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ47)
+
+<a name="FAQ48"></a>
+[**(48) Why are some domain names blocked while they are set to be allowed?**](https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ48)
 
 Support
 -------
 
-* Questions: please [use this XDA-Developers forum thread](http://forum.xda-developers.com/showthread.php?t=3233012)
-* Feature requests and bugs: please [create an issue on GitHub](https://github.com/M66B/NetGuard/issues/new)
-
-Please do not use GitHub for questions.
+For questions, feature requests and bug reports, please [use this XDA-Developers forum thread](http://forum.xda-developers.com/showthread.php?t=3233012)
 
 **There is no support on ad blocking.**
 
@@ -211,12 +228,11 @@ Contributing
 Building is simple, if you install the right tools:
 
 * [Android Studio 2.1](http://developer.android.com/sdk/)
-* [Android NDK r11](http://developer.android.com/tools/sdk/ndk/)
+* [Android NDK r12](http://developer.android.com/tools/sdk/ndk/)
 
 The native code is built as part of the Android Studio project.
 
 It is expected that you can solve build problems yourself, so there is no support on building.
-It builds fine on Linux so one can use [VirtualBox](http://virtualbox.org) + [Lubuntu](http://lubuntu.net) + [Android Studio package](https://paolorotolo.github.io/android-studio/) to get a VM setup that is known to be working.
 If you cannot build yourself, there are prebuilt versions of NetGuard available [here](https://github.com/M66B/NetGuard/releases).
 
 *Translating*

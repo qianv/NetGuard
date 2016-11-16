@@ -28,6 +28,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.android.vending.billing.IInAppBillingService;
@@ -148,11 +149,11 @@ public class IAB implements ServiceConnection {
         return (details == null ? new ArrayList<String>() : details);
     }
 
-    public PendingIntent getBuyIntent(String sku) throws RemoteException {
+    public PendingIntent getBuyIntent(String sku, boolean subscription) throws RemoteException {
         if (service == null)
             return null;
-        Bundle bundle = service.getBuyIntent(IAB_VERSION, context.getPackageName(), sku, "inapp", "netguard");
-        Log.i(TAG, "getBuyIntent");
+        Bundle bundle = service.getBuyIntent(IAB_VERSION, context.getPackageName(), sku, subscription ? "subs" : "inapp", "netguard");
+        Log.i(TAG, "getBuyIntent sku=" + sku + " subscription=" + subscription);
         Util.logBundle(bundle);
         int response = (bundle == null ? -1 : bundle.getInt("RESPONSE_CODE", -1));
         Log.i(TAG, "Response=" + getResult(response));
@@ -170,12 +171,31 @@ public class IAB implements ServiceConnection {
     }
 
     public static boolean isPurchased(String sku, Context context) {
-        if (Util.isDebuggable(context) || Util.getSelfVersionName(context).contains("beta"))
-            return true;
+        if (Util.isDebuggable(context)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            return !prefs.getBoolean("debug_iab", false);
+        }
+
         SharedPreferences prefs = context.getSharedPreferences("IAB", Context.MODE_PRIVATE);
+        if (ActivityPro.SKU_SUPPORT1.equals(sku) || ActivityPro.SKU_SUPPORT2.equals(sku))
+            return prefs.getBoolean(sku, false);
+
         return (prefs.getBoolean(sku, false) ||
                 prefs.getBoolean(ActivityPro.SKU_PRO1, false) ||
                 prefs.getBoolean(ActivityPro.SKU_DONATION, false));
+    }
+
+    public static boolean isPurchasedAny(Context context) {
+        if (Util.isDebuggable(context)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            return !(prefs.getBoolean("debug_iab", false) || prefs.getBoolean("debug_ads", false));
+        }
+
+        SharedPreferences prefs = context.getSharedPreferences("IAB", Context.MODE_PRIVATE);
+        for (String key : prefs.getAll().keySet())
+            if (prefs.getBoolean(key, false))
+                return true;
+        return false;
     }
 
     public static String getResult(int responseCode) {

@@ -738,9 +738,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             SQLiteDatabase db = this.getWritableDatabase();
             db.beginTransactionNonExclusive();
             try {
+                int ttl = rr.TTL;
+                if (ttl < 15 * 60)
+                    ttl = 15 * 60;
+
                 ContentValues cv = new ContentValues();
                 cv.put("time", rr.Time);
-                cv.put("ttl", rr.TTL);
+                cv.put("ttl", ttl * 1000L);
 
                 int rows = db.update("dns", cv, "qname = ? AND aname = ? AND resource = ?",
                         new String[]{rr.QName, rr.AName, rr.Resource});
@@ -766,17 +770,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    public void cleanupDns(long time) {
+    public void cleanupDns() {
         mLock.writeLock().lock();
         try {
             SQLiteDatabase db = this.getWritableDatabase();
             db.beginTransactionNonExclusive();
             try {
                 // There is no index on time for write performance
-                int rows = db.delete("dns", "time < ?", new String[]{Long.toString(time)});
-                Log.i(TAG, "Cleanup DNS" +
-                        " before=" + SimpleDateFormat.getDateTimeInstance().format(new Date(time)) +
-                        " rows=" + rows);
+                long now = new Date().getTime();
+                db.execSQL("DELETE FROM dns WHERE time + ttl < " + now);
+                Log.i(TAG, "Cleanup DNS");
+
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+        } finally {
+            mLock.writeLock().unlock();
+        }
+    }
+
+    public void clearDns() {
+        mLock.writeLock().lock();
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.beginTransactionNonExclusive();
+            try {
+                db.delete("dns", null, new String[]{});
 
                 db.setTransactionSuccessful();
             } finally {
@@ -813,7 +833,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // There is a segmented index on qname
             String query = "SELECT ID AS _id, *";
             query += " FROM dns";
-            query += " ORDER BY qname";
+            query += " ORDER BY qname, resource";
             return db.rawQuery(query, new String[]{});
         } finally {
             mLock.readLock().unlock();
@@ -821,17 +841,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public Cursor getAccessDns(String dname) {
+        long now = new Date().getTime();
         mLock.readLock().lock();
         try {
             SQLiteDatabase db = this.getReadableDatabase();
 
             // There is a segmented index on dns.qname
             // There is an index on access.daddr and access.block
-            String query = "SELECT a.uid, a.version, a.protocol, a.daddr, d.resource, a.dport, a.block";
+            String query = "SELECT a.uid, a.version, a.protocol, a.daddr, d.resource, a.dport, a.block, d.time, d.ttl";
             query += " FROM access AS a";
             query += " LEFT JOIN dns AS d";
             query += "   ON d.qname = a.daddr";
             query += " WHERE a.block >= 0";
+            query += " AND d.time + d.ttl >= " + now;
             if (dname != null)
                 query += " AND a.daddr = ?";
 

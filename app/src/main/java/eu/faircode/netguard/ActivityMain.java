@@ -26,13 +26,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.net.VpnService;
 import android.os.AsyncTask;
 import android.os.Build;
-import android.os.PowerManager;
+import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -47,7 +48,12 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
 import android.support.v7.widget.SwitchCompat;
+import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
+import android.text.style.ImageSpan;
+import android.text.style.UnderlineSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -61,8 +67,15 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
 
 import java.util.List;
 
@@ -122,7 +135,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         boolean enabled = prefs.getBoolean("enabled", false);
         boolean initialized = prefs.getBoolean("initialized", false);
-        prefs.edit().remove("hint_system").apply();
 
         // Upgrade
         Receiver.upgrade(initialized, this);
@@ -199,7 +211,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                                                     startActivityForResult(prepare, REQUEST_VPN);
                                                 } catch (Throwable ex) {
                                                     Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                                                    Util.sendCrashReport(ex, ActivityMain.this);
                                                     onActivityResult(REQUEST_VPN, RESULT_CANCELED, null);
                                                     prefs.edit().putBoolean("enabled", false).apply();
                                                 }
@@ -218,7 +229,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                     } catch (Throwable ex) {
                         // Prepare failed
                         Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                        Util.sendCrashReport(ex, ActivityMain.this);
                         prefs.edit().putBoolean("enabled", false).apply();
                     }
 
@@ -274,18 +284,20 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             }
         });
 
-        final LinearLayout llSystem = (LinearLayout) findViewById(R.id.llSystem);
-        Button btnSystem = (Button) findViewById(R.id.btnSystem);
-        boolean system = prefs.getBoolean("manage_system", false);
-        boolean hint = prefs.getBoolean("hint_system", true);
-        llSystem.setVisibility(!system && hint ? View.VISIBLE : View.GONE);
-        btnSystem.setOnClickListener(new View.OnClickListener() {
+        // Hint usage
+        final LinearLayout llUsage = (LinearLayout) findViewById(R.id.llUsage);
+        Button btnUsage = (Button) findViewById(R.id.btnUsage);
+        boolean hintUsage = prefs.getBoolean("hint_usage", true);
+        llUsage.setVisibility(hintUsage ? View.VISIBLE : View.GONE);
+        btnUsage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                prefs.edit().putBoolean("hint_system", false).apply();
-                llSystem.setVisibility(View.GONE);
+                prefs.edit().putBoolean("hint_usage", false).apply();
+                llUsage.setVisibility(View.GONE);
+                showHints();
             }
         });
+        showHints();
 
         // Listen for preference changes
         prefs.registerOnSharedPreferenceChangeListener(this);
@@ -306,25 +318,31 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         registerReceiver(packageChangedReceiver, intentFilter);
 
         // First use
-        if (!initialized) {
+        boolean admob = prefs.getBoolean("admob", false);
+        if (!initialized || !admob) {
             // Create view
             LayoutInflater inflater = LayoutInflater.from(this);
             View view = inflater.inflate(R.layout.first, null, false);
+
             TextView tvFirst = (TextView) view.findViewById(R.id.tvFirst);
+            TextView tvAdmob = (TextView) view.findViewById(R.id.tvAdmob);
             tvFirst.setMovementMethod(LinkMovementMethod.getInstance());
+            tvAdmob.setMovementMethod(LinkMovementMethod.getInstance());
 
             // Show dialog
             dialogFirst = new AlertDialog.Builder(this)
                     .setView(view)
                     .setCancelable(false)
-                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.app_agree, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            if (running)
+                            if (running) {
                                 prefs.edit().putBoolean("initialized", true).apply();
+                                prefs.edit().putBoolean("admob", true).apply();
+                            }
                         }
                     })
-                    .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                    .setNegativeButton(R.string.app_disagree, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             if (running)
@@ -372,6 +390,10 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
         }
 
+        // Initialize ads
+        initAds();
+
+        // Handle intent
         checkExtras(getIntent());
     }
 
@@ -390,33 +412,41 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         }
     }
 
-    private void checkExtras(Intent intent) {
-        // Approve request
-        if (intent.hasExtra(EXTRA_APPROVE)) {
-            Log.i(TAG, "Requesting VPN approval");
-            swEnabled.toggle();
-        }
-
-        if (intent.hasExtra(EXTRA_LOGCAT)) {
-            Log.i(TAG, "Requesting logcat");
-            Intent logcat = getIntentLogcat();
-            if (logcat.resolveActivity(getPackageManager()) != null)
-                startActivityForResult(logcat, REQUEST_LOGCAT);
-        }
-    }
-
     @Override
     protected void onResume() {
+        Log.i(TAG, "Resume");
+
         DatabaseHelper.getInstance(this).addAccessChangedListener(accessChangedListener);
         if (adapter != null)
             adapter.notifyDataSetChanged();
+
+        // Ads
+        if (!IAB.isPurchasedAny(this) && Util.hasPlayServices(this))
+            enableAds();
+        else
+            disableAds();
+
         super.onResume();
     }
 
     @Override
     protected void onPause() {
+        Log.i(TAG, "Pause");
         super.onPause();
+
         DatabaseHelper.getInstance(this).removeAccessChangedListener(accessChangedListener);
+
+        disableAds();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        Log.i(TAG, "Config");
+        super.onConfigurationChanged(newConfig);
+
+        disableAds();
+        if (!IAB.isPurchasedAny(this) && Util.hasPlayServices(this))
+            enableAds();
     }
 
     @Override
@@ -429,6 +459,7 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         }
 
         running = false;
+        adapter = null;
 
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
 
@@ -531,12 +562,19 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                 "show_nointernet".equals(name) ||
                 "show_disabled".equals(name) ||
                 "sort".equals(name) ||
-                "imported".equals(name))
+                "imported".equals(name)) {
             updateApplicationList(null);
 
-        else if ("manage_system".equals(name)) {
+            final LinearLayout llWhitelist = (LinearLayout) findViewById(R.id.llWhitelist);
+            boolean whitelist_wifi = prefs.getBoolean("whitelist_wifi", false);
+            boolean whitelist_other = prefs.getBoolean("whitelist_other", false);
+            boolean hintWhitelist = prefs.getBoolean("hint_whitelist", true);
+            llWhitelist.setVisibility(!(whitelist_wifi || whitelist_other) && hintWhitelist ? View.VISIBLE : View.GONE);
+
+        } else if ("manage_system".equals(name)) {
             invalidateOptionsMenu();
             updateApplicationList(null);
+
             LinearLayout llSystem = (LinearLayout) findViewById(R.id.llSystem);
             boolean system = prefs.getBoolean("manage_system", false);
             boolean hint = prefs.getBoolean("hint_system", true);
@@ -602,98 +640,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         }
     };
 
-    private void updateApplicationList(final String search) {
-        Log.i(TAG, "Update search=" + search);
-
-        new AsyncTask<Object, Object, List<Rule>>() {
-            private boolean refreshing = true;
-
-            @Override
-            protected void onPreExecute() {
-                swipeRefresh.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (refreshing)
-                            swipeRefresh.setRefreshing(true);
-                    }
-                });
-            }
-
-            @Override
-            protected List<Rule> doInBackground(Object... arg) {
-                return Rule.getRules(false, ActivityMain.this);
-            }
-
-            @Override
-            protected void onPostExecute(List<Rule> result) {
-                if (running) {
-                    if (adapter != null) {
-                        adapter.set(result);
-                        updateSearch(search);
-                    }
-
-                    if (swipeRefresh != null) {
-                        refreshing = false;
-                        swipeRefresh.setRefreshing(false);
-                    }
-                }
-            }
-        }.execute();
-    }
-
-    private void updateSearch(String search) {
-        if (menuSearch != null) {
-            SearchView searchView = (SearchView) MenuItemCompat.getActionView(menuSearch);
-            if (search == null) {
-                if (menuSearch.isActionViewExpanded())
-                    adapter.getFilter().filter(searchView.getQuery().toString());
-            } else {
-                MenuItemCompat.expandActionView(menuSearch);
-                searchView.setQuery(search, true);
-            }
-        }
-    }
-
-    private void checkDoze() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            final Intent doze = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            if (!pm.isIgnoringBatteryOptimizations(getPackageName()) &&
-                    getPackageManager().resolveActivity(doze, 0) != null) {
-                final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-                if (!prefs.getBoolean("nodoze", false)) {
-                    LayoutInflater inflater = LayoutInflater.from(this);
-                    View view = inflater.inflate(R.layout.doze, null, false);
-                    final CheckBox cbDontAsk = (CheckBox) view.findViewById(R.id.cbDontAsk);
-                    dialogDoze = new AlertDialog.Builder(this)
-                            .setView(view)
-                            .setCancelable(true)
-                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    prefs.edit().putBoolean("nodoze", cbDontAsk.isChecked()).apply();
-                                    startActivity(doze);
-                                }
-                            })
-                            .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    prefs.edit().putBoolean("nodoze", cbDontAsk.isChecked()).apply();
-                                }
-                            })
-                            .setOnDismissListener(new DialogInterface.OnDismissListener() {
-                                @Override
-                                public void onDismiss(DialogInterface dialogInterface) {
-                                    dialogDoze = null;
-                                }
-                            })
-                            .create();
-                    dialogDoze.show();
-                }
-            }
-        }
-    }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         if (Build.VERSION.SDK_INT < MIN_SDK)
@@ -744,6 +690,10 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             }
         });
 
+        markPro(menu.findItem(R.id.menu_log), ActivityPro.SKU_LOG);
+        if (!IAB.isPurchasedAny(this))
+            markPro(menu.findItem(R.id.menu_pro), null);
+
         if (!Util.hasValidFingerprint(this) || getIntentInvite(this).resolveActivity(getPackageManager()) == null)
             menu.removeItem(R.id.menu_invite);
 
@@ -751,6 +701,16 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             menu.removeItem(R.id.menu_support);
 
         return true;
+    }
+
+    private void markPro(MenuItem menu, String sku) {
+        if (sku == null || !IAB.isPurchased(sku, this)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            boolean dark = prefs.getBoolean("dark_theme", false);
+            SpannableStringBuilder ssb = new SpannableStringBuilder("  " + menu.getTitle());
+            ssb.setSpan(new ImageSpan(this, dark ? R.drawable.ic_shopping_cart_white_24dp : R.drawable.ic_shopping_cart_black_24dp), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            menu.setTitle(ssb);
+        }
     }
 
     @Override
@@ -769,13 +729,19 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         menu.findItem(R.id.menu_app_nointernet).setChecked(prefs.getBoolean("show_nointernet", true));
         menu.findItem(R.id.menu_app_disabled).setChecked(prefs.getBoolean("show_disabled", true));
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            Menu submenu = menu.findItem(R.id.menu_sort).getSubMenu();
+            submenu.removeItem(R.id.menu_sort_data);
+        }
+
         String sort = prefs.getString("sort", "name");
-        if ("data".equals(sort))
+        if ("data".equals(sort) && Build.VERSION.SDK_INT < Build.VERSION_CODES.N)
             menu.findItem(R.id.menu_sort_data).setChecked(true);
         else if ("uid".equals(sort))
             menu.findItem(R.id.menu_sort_uid).setChecked(true);
         else
             menu.findItem(R.id.menu_sort_name).setChecked(true);
+
 
         return super.onPrepareOptionsMenu(menu);
     }
@@ -858,6 +824,304 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         }
     }
 
+    private void showHints() {
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean hintUsage = prefs.getBoolean("hint_usage", true);
+
+        // Hint white listing
+        final LinearLayout llWhitelist = (LinearLayout) findViewById(R.id.llWhitelist);
+        Button btnWhitelist = (Button) findViewById(R.id.btnWhitelist);
+        boolean whitelist_wifi = prefs.getBoolean("whitelist_wifi", false);
+        boolean whitelist_other = prefs.getBoolean("whitelist_other", false);
+        boolean hintWhitelist = prefs.getBoolean("hint_whitelist", true);
+        llWhitelist.setVisibility(!(whitelist_wifi || whitelist_other) && hintWhitelist && !hintUsage ? View.VISIBLE : View.GONE);
+        btnWhitelist.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                prefs.edit().putBoolean("hint_whitelist", false).apply();
+                llWhitelist.setVisibility(View.GONE);
+            }
+        });
+
+        // Hint push messages
+        final LinearLayout llPush = (LinearLayout) findViewById(R.id.llPush);
+        Button btnPush = (Button) findViewById(R.id.btnPush);
+        boolean hintPush = prefs.getBoolean("hint_push", true);
+        llPush.setVisibility(hintPush && !hintUsage ? View.VISIBLE : View.GONE);
+        btnPush.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                prefs.edit().putBoolean("hint_push", false).apply();
+                llPush.setVisibility(View.GONE);
+            }
+        });
+
+        // Hint system applications
+        final LinearLayout llSystem = (LinearLayout) findViewById(R.id.llSystem);
+        Button btnSystem = (Button) findViewById(R.id.btnSystem);
+        boolean system = prefs.getBoolean("manage_system", false);
+        boolean hintSystem = prefs.getBoolean("hint_system", true);
+        llSystem.setVisibility(!system && hintSystem && !hintUsage ? View.VISIBLE : View.GONE);
+        btnSystem.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                prefs.edit().putBoolean("hint_system", false).apply();
+                llSystem.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private void initAds() {
+        // https://developers.google.com/android/reference/com/google/android/gms/ads/package-summary
+        MobileAds.initialize(getApplicationContext(), getString(R.string.ad_app_id));
+
+        final LinearLayout llAd = (LinearLayout) findViewById(R.id.llAd);
+        TextView tvAd = (TextView) findViewById(R.id.tvAd);
+        final AdView adView = (AdView) findViewById(R.id.adView);
+
+        SpannableString content = new SpannableString(getString(R.string.title_pro_ads));
+        content.setSpan(new UnderlineSpan(), 0, content.length(), 0);
+        tvAd.setText(content);
+
+        tvAd.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivity(new Intent(ActivityMain.this, ActivityPro.class));
+            }
+        });
+
+        adView.setAdListener(new AdListener() {
+            @Override
+            public void onAdLoaded() {
+                Log.i(TAG, "Ad loaded");
+                llAd.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onAdFailedToLoad(int errorCode) {
+                llAd.setVisibility(View.VISIBLE);
+                switch (errorCode) {
+                    case AdRequest.ERROR_CODE_INTERNAL_ERROR:
+                        Log.w(TAG, "Ad load error=INTERNAL_ERROR");
+                        break;
+                    case AdRequest.ERROR_CODE_INVALID_REQUEST:
+                        Log.w(TAG, "Ad load error=INVALID_REQUEST");
+                        break;
+                    case AdRequest.ERROR_CODE_NETWORK_ERROR:
+                        Log.w(TAG, "Ad load error=NETWORK_ERROR");
+                        break;
+                    case AdRequest.ERROR_CODE_NO_FILL:
+                        Log.w(TAG, "Ad load error=NO_FILL");
+                        break;
+                    default:
+                        Log.w(TAG, "Ad load error=" + errorCode);
+                }
+            }
+
+            @Override
+            public void onAdOpened() {
+                Log.i(TAG, "Ad opened");
+            }
+
+            @Override
+            public void onAdClosed() {
+                Log.i(TAG, "Ad closed");
+            }
+
+            @Override
+            public void onAdLeftApplication() {
+                Log.i(TAG, "Ad left app");
+            }
+        });
+    }
+
+    private void enableAds() {
+        RelativeLayout rlAd = (RelativeLayout) findViewById(R.id.rlAd);
+        LinearLayout llAd = (LinearLayout) findViewById(R.id.llAd);
+        final AdView adView = (AdView) findViewById(R.id.adView);
+
+        rlAd.setVisibility(View.VISIBLE);
+        llAd.setVisibility(View.VISIBLE);
+
+        Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                AdRequest adRequest = new AdRequest.Builder()
+                        .addTestDevice(getString(R.string.ad_test_device_id))
+                        .build();
+                adView.loadAd(adRequest);
+            }
+        }, 1000);
+    }
+
+    private void disableAds() {
+        RelativeLayout rlAd = (RelativeLayout) findViewById(R.id.rlAd);
+        AdView adView = (AdView) findViewById(R.id.adView);
+
+        rlAd.setVisibility(View.GONE);
+
+        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) adView.getLayoutParams();
+        RelativeLayout parent = (RelativeLayout) adView.getParent();
+        parent.removeView(adView);
+
+        adView.destroy();
+        adView = new AdView(this);
+        adView.setAdSize(AdSize.SMART_BANNER);
+        adView.setAdUnitId(getString(R.string.ad_banner_unit_id));
+        adView.setId(R.id.adView);
+        adView.setLayoutParams(params);
+        parent.addView(adView);
+    }
+
+    private void checkExtras(Intent intent) {
+        // Approve request
+        if (intent.hasExtra(EXTRA_APPROVE)) {
+            Log.i(TAG, "Requesting VPN approval");
+            swEnabled.toggle();
+        }
+
+        if (intent.hasExtra(EXTRA_LOGCAT)) {
+            Log.i(TAG, "Requesting logcat");
+            Intent logcat = getIntentLogcat();
+            if (logcat.resolveActivity(getPackageManager()) != null)
+                startActivityForResult(logcat, REQUEST_LOGCAT);
+        }
+    }
+
+    private void updateApplicationList(final String search) {
+        Log.i(TAG, "Update search=" + search);
+
+        new AsyncTask<Object, Object, List<Rule>>() {
+            private boolean refreshing = true;
+
+            @Override
+            protected void onPreExecute() {
+                swipeRefresh.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (refreshing)
+                            swipeRefresh.setRefreshing(true);
+                    }
+                });
+            }
+
+            @Override
+            protected List<Rule> doInBackground(Object... arg) {
+                return Rule.getRules(false, ActivityMain.this);
+            }
+
+            @Override
+            protected void onPostExecute(List<Rule> result) {
+                if (running) {
+                    if (adapter != null) {
+                        adapter.set(result);
+                        updateSearch(search);
+                    }
+
+                    if (swipeRefresh != null) {
+                        refreshing = false;
+                        swipeRefresh.setRefreshing(false);
+                    }
+                }
+            }
+        }.execute();
+    }
+
+    private void updateSearch(String search) {
+        if (menuSearch != null) {
+            SearchView searchView = (SearchView) MenuItemCompat.getActionView(menuSearch);
+            if (search == null) {
+                if (menuSearch.isActionViewExpanded())
+                    adapter.getFilter().filter(searchView.getQuery().toString());
+            } else {
+                MenuItemCompat.expandActionView(menuSearch);
+                searchView.setQuery(search, true);
+            }
+        }
+    }
+
+    private void checkDoze() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            final Intent doze = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            if (Util.batteryOptimizing(this) && getPackageManager().resolveActivity(doze, 0) != null) {
+                final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+                if (!prefs.getBoolean("nodoze", false)) {
+                    LayoutInflater inflater = LayoutInflater.from(this);
+                    View view = inflater.inflate(R.layout.doze, null, false);
+                    final CheckBox cbDontAsk = (CheckBox) view.findViewById(R.id.cbDontAsk);
+                    dialogDoze = new AlertDialog.Builder(this)
+                            .setView(view)
+                            .setCancelable(true)
+                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    prefs.edit().putBoolean("nodoze", cbDontAsk.isChecked()).apply();
+                                    startActivity(doze);
+                                }
+                            })
+                            .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    prefs.edit().putBoolean("nodoze", cbDontAsk.isChecked()).apply();
+                                }
+                            })
+                            .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                                @Override
+                                public void onDismiss(DialogInterface dialogInterface) {
+                                    dialogDoze = null;
+                                    checkDataSaving();
+                                }
+                            })
+                            .create();
+                    dialogDoze.show();
+                } else
+                    checkDataSaving();
+            } else
+                checkDataSaving();
+        }
+    }
+
+    private void checkDataSaving() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            final Intent settings = new Intent(
+                    Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS,
+                    Uri.parse("package:" + getPackageName()));
+            if (Util.dataSaving(this) && getPackageManager().resolveActivity(settings, 0) != null) {
+                final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+                if (!prefs.getBoolean("nodata", false)) {
+                    LayoutInflater inflater = LayoutInflater.from(this);
+                    View view = inflater.inflate(R.layout.datasaving, null, false);
+                    final CheckBox cbDontAsk = (CheckBox) view.findViewById(R.id.cbDontAsk);
+                    dialogDoze = new AlertDialog.Builder(this)
+                            .setView(view)
+                            .setCancelable(true)
+                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    prefs.edit().putBoolean("nodata", cbDontAsk.isChecked()).apply();
+                                    startActivity(settings);
+                                }
+                            })
+                            .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    prefs.edit().putBoolean("nodata", cbDontAsk.isChecked()).apply();
+                                }
+                            })
+                            .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                                @Override
+                                public void onDismiss(DialogInterface dialogInterface) {
+                                    dialogDoze = null;
+                                }
+                            })
+                            .create();
+                    dialogDoze.show();
+                }
+            }
+        }
+    }
+
     private void menu_legend() {
         TypedValue tv = new TypedValue();
         getTheme().resolveAttribute(R.attr.colorOn, tv, true);
@@ -916,6 +1180,7 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         TextView tvVersionCode = (TextView) view.findViewById(R.id.tvVersionCode);
         Button btnRate = (Button) view.findViewById(R.id.btnRate);
         TextView tvLicense = (TextView) view.findViewById(R.id.tvLicense);
+        TextView tvAdmob = (TextView) view.findViewById(R.id.tvAdmob);
 
         // Show version
         tvVersionName.setText(Util.getSelfVersionName(this));
@@ -925,6 +1190,8 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
 
         // Handle license
         tvLicense.setMovementMethod(LinkMovementMethod.getInstance());
+        tvAdmob.setMovementMethod(LinkMovementMethod.getInstance());
+        tvAdmob.setVisibility(IAB.isPurchasedAny(this) ? View.GONE : View.VISIBLE);
 
         // Handle logcat
         view.setOnClickListener(new View.OnClickListener() {

@@ -8,6 +8,9 @@
   <string name="app_first">Great care has been taken to develop and test NetGuard,
 however it is impossible to guarantee NetGuard will work correctly on every device.
 \n\nBy using NetGuard, you agree to the <a href="http://www.gnu.org/licenses/gpl.txt">GNU General Public License version 3</a></string>
+  <string name="app_admob">NetGuard uses Google\'s AdMob advertising service. AdMob\'s privacy policy is available <a href="https://www.google.com/intl/en/policies/privacy/">here</a>.</string>
+  <string name="app_agree">I agree</string>
+  <string name="app_disagree">I disagree</string>
   <string name="menu_search">Search for application</string>
   <string name="menu_filter">Filter applications</string>
   <string name="menu_app_user">Show user applications</string>
@@ -37,13 +40,14 @@ however it is impossible to guarantee NetGuard will work correctly on every devi
   <string name="menu_reset">Reset</string>
   <string name="menu_add">Add</string>
   <string name="menu_delete">Delete</string>
+  <string name="menu_cleanup">Cleanup</string>
   <string name="title_protocol">Protocol</string>
   <string name="title_dport">Source port</string>
   <string name="title_raddr">Destination address</string>
   <string name="title_rport">Destination port</string>
   <string name="title_ruid">Destination application</string>
   <string name="title_external">For an external server select \'nobody\'</string>
-  <string name="setting_defaults">Defaults</string>
+  <string name="setting_defaults">Defaults (white/blacklist)</string>
   <string name="setting_whitelist_wifi">Block Wi-Fi</string>
   <string name="setting_whitelist_other">Block mobile</string>
   <string name="setting_screen_wifi">Allow Wi-Fi when screen on</string>
@@ -74,13 +78,20 @@ however it is impossible to guarantee NetGuard will work correctly on every devi
   <string name="setting_filter">Filter traffic</string>
   <string name="setting_track_usage">Track network usage</string>
   <string name="setting_reset_usage">Reset network usage</string>
+  <string name="setting_show_resolved">Show resolved domain names</string>
   <string name="setting_block_domains">Block domain names</string>
   <string name="setting_forwarding">Port forwarding</string>
   <string name="setting_vpn4">VPN IPv4: %s</string>
   <string name="setting_vpn6">VPN IPv6: %s</string>
   <string name="setting_dns">VPN DNS: %s</string>
+  <string name="setting_socks5_enabled">Use SOCKS5 proxy</string>
+  <string name="setting_socks5_addr">SOCKS5 address: %s</string>
+  <string name="setting_socks5_port">SOCKS5 port: %s</string>
+  <string name="setting_socks5_username">SOCKS5 username: %s</string>
+  <string name="setting_socks5_password">SOCKS5 password: %s</string>
   <string name="setting_pcap_record_size">PCAP record size: %s B</string>
   <string name="setting_pcap_file_size">PCAP max. file size: %s MB</string>
+  <string name="setting_watchdog">Watchdog: every %s minutes</string>
   <string name="setting_stats_category">Speed notification</string>
   <string name="setting_stats">Show speed notification</string>
   <string name="setting_stats_top">Show top applications</string>
@@ -116,7 +127,8 @@ however it is impossible to guarantee NetGuard will work correctly on every devi
   <string name="summary_filter">Filter IP packets going out of the VPN tunnel. This might result in extra battery usage.</string>
   <string name="summary_track_usage">Track the number of bytes sent and received for each application and address. This might result in extra battery usage.</string>
   <string name="summary_block_domains">Respond with \'name error\' (NXDOMAIN) for blocked domain names. This switch is disabled when no hosts file is available.</string>
-  <string name="summary_proxy">SOCKS5 proxy server IP address and port number</string>
+  <string name="summary_socks5_enabled">Only TCP traffic will be sent to the proxy server</string>
+  <string name="summary_watchdog">Periodically check if NetGuard is still running (enter zero to disable this option). This might result in extra battery usage.</string>
   <string name="summary_stats">Show network speed graph in status bar notification</string>
   <string name="msg_sure">Are you sure?</string>
   <string name="msg_started">Enforcing rules</string>
@@ -125,16 +137,17 @@ however it is impossible to guarantee NetGuard will work correctly on every devi
   <string name="msg_waiting">Waiting for event</string>
   <string name="msg_disabled">NetGuard is disabled, use the switch above to enable NetGuard</string>
   <string name="msg_revoked">NetGuard has been disabled, likely by using another VPN based application</string>
-  <string name="msg_error">NetGuard has been disabled, because of an internal error</string>
-  <string name="msg_start_failed">The Android VPN service could not be started, which is most likely caused by a bug in your Android version.
-Restarting your device or revoking the VPN permission using the Android settings from NetGuard (if possible) might (temporarily) solve this problem.</string>
   <string name="msg_installed">\'%1$s\' installed</string>
+  <string name="msg_installed_n">Has been installed</string>
   <string name="msg_access">%1$s attempted internet access</string>
+  <string name="msg_access_n">Attempted internet access</string>
   <string name="msg_completed">Action completed</string>
   <string name="msg_vpn">NetGuard uses a local VPN to filter internet traffic.
 For this reason, please allow a VPN connection in the next dialog.
 Your internet traffic is not being sent to a remote VPN server.</string>
-  <string name="msg_autostart">NetGuard could not be started automatically on boot because of a bug in your Android version</string>
+  <string name="msg_autostart">NetGuard could not start automatically. This is likely because of a bug in your Android version.</string>
+  <string name="msg_error">An unexpected error has occurred: \'%s\'</string>
+  <string name="msg_start_failed">Android refused to start the VPN service at this moment. This is likely because of a bug in your Android version.</string>
   <string name="msg_try">Try NetGuard</string>
   <string name="msg_terms">By donating you agree to the <a href="http://www.netguard.me/#terms">terms &amp; conditions</a></string>
   <string name="msg_dimming">If you cannot press OK in the next dialog, another (screen dimming) application is likely manipulating the screen.</string>
@@ -147,7 +160,10 @@ Your internet traffic is not being sent to a remote VPN server.</string>
   <string name="msg_count">%dx</string>
   <string name="msg_doze">For consistent results, the Android battery optimizations should be disabled for NetGuard.
 \n\nIn the next dialog, select \"All apps\" at the top, tap on NetGuard in the list and select and confirm \"Don\'t optimize\".</string>
+  <string name="msg_datasaving">For consistent results, the Android data saving options should be disabled for NetGuard
+\n\nIn the next dialog, enable the options \"Background data\" and \"Unrestricted data usage\"</string>
   <string name="msg_filter">Using filtering will cause Android to attribute data and power usage to NetGuard - Android assumes the data and power are being used by NetGuard, rather than the original applications</string>
+  <string name="msg_filter4">Android 4 requires filtering to be enabled</string>
   <string name="msg_log_disabled">Traffic logging is disabled, use the switch above to enable logging. Traffic logging might result in extra battery usage.</string>
   <string name="msg_clear_rules">This will reset the rules and conditions to their default values</string>
   <string name="msg_reset_access">This will delete access attempt log lines without allow/block rules</string>
@@ -160,7 +176,10 @@ Your internet traffic is not being sent to a remote VPN server.</string>
   <string name="msg_metered">Network is metered</string>
   <string name="msg_queue">NetGuard is busy</string>
   <string name="msg_update">Update available, tap to download</string>
-  <string name="msg_system">Managing system applications can be enabled in the advanced options</string>
+  <string name="msg_usage">You can allow (greenish) or deny (reddish) Wi-Fi or mobile internet access to by tapping on the icons next to an application</string>
+  <string name="msg_whitelist">Internet access is allowed by default (blacklist mode), this can be changed in the settings</string>
+  <string name="msg_push">Incoming (push) messages are mostly handled by the system component Play services, which is allowed internet access by default</string>
+  <string name="msg_system">Managing all (system) applications can be enabled in the settings</string>
   <string name="msg_issue">Please describe the problem and indicate the time of the problem:</string>
   <string name="title_unmetered_allowed">Unmetered traffic is allowed</string>
   <string name="title_unmetered_blocked">Unmetered traffic is blocked</string>
@@ -171,25 +190,27 @@ Your internet traffic is not being sent to a remote VPN server.</string>
   <string name="title_interactive_allowed">Allow when screen is on</string>
   <string name="title_roaming_blocked">Block when roaming</string>
   <string name="title_metered">By default a Wi-Fi connection is considered to be unmetered and a mobile connection to be metered</string>
+  <string name="title_internet">has no internet permission</string>
+  <string name="title_disabled">is disabled</string>
   <string name="title_apply">Apply rules and conditions</string>
   <string name="title_conditions">Conditions</string>
   <string name="title_screen_wifi">Allow Wi-Fi when screen is on</string>
   <string name="title_screen_other">Allow mobile when screen is on</string>
   <string name="title_roaming_symbol">R</string>
   <string name="title_roaming">Block when roaming</string>
-  <string name="title_disabled">is disabled</string>
-  <string name="title_internet">has no internet permission</string>
   <string name="title_related">Filter related</string>
   <string name="title_access">Access attempts</string>
   <string name="title_no_log"><u>Logging is not enabled</u></string>
+  <string name="title_no_filter"><u>Filtering is not enabled</u></string>
   <string name="title_precedence">Access rules take precedence over other rules</string>
+  <string name="title_options">Options</string>
+  <string name="title_notify">Notify internet access attempts</string>
   <string name="title_rate">Rate</string>
   <string name="title_allow">Allow</string>
   <string name="title_block">Block</string>
   <string name="title_root">root</string>
   <string name="title_mediaserver">mediaserver</string>
   <string name="title_nobody">nobody</string>
-  <string name="title_notify">Notify internet access attempts</string>
   <string name="title_dontask">Don\'t ask again</string>
   <string name="title_log_whois">Whois %1$s</string>
   <string name="title_log_port">Port %1$d</string>
@@ -201,8 +222,11 @@ Your internet traffic is not being sent to a remote VPN server.</string>
   <string name="title_pro_speed">Network speed graph notification</string>
   <string name="title_pro_theme">Appearance (theme, colors)</string>
   <string name="title_pro_all">All above pro features</string>
-  <string name="title_pro_buy">Details</string>
+  <string name="title_pro_dev">Support development</string>
+  <string name="title_pro_buy">Buy</string>
   <string name="title_pro_bought">Enabled</string>
+  <string name="title_pro_details">Tap on a title for more information</string>
+  <string name="title_pro_ads">Buying any pro feature will disable all advertisements</string>
   <string name="title_pro_challenge">Challenge</string>
   <string name="title_pro_reponse">Response</string>
   <string-array name="themeNames">

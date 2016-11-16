@@ -6,6 +6,9 @@
   <string name="app_android">NetGuard wymaga Android 4.0 lub nowszy</string>
   <string name="app_license">Używając NetGuard, zgadzasz się z <a href="//www.gnu.org/licenses/gpl.txt">GNU General Public License version 3</a></string>
   <string name="app_first">Wielka staranność została podjęta aby rozwijać i testować NetGuard, jednakże nie jest możliwa gwarancja, iż NetGuard będzie działać poprawnie na każdym urządzeniu.\n\nUżywając NetGuard zgadzasz się z licencją <a href="http://www.gnu.org/licenses/gpl.txt">GNU General Public License version 3</a></string>
+  <string name="app_admob">NetGuard uses Google\'s AdMob advertising service. AdMob\'s privacy policy is available <a href="https://www.google.com/intl/en/policies/privacy/">here</a>.</string>
+  <string name="app_agree">I agree</string>
+  <string name="app_disagree">I disagree</string>
   <string name="menu_search">Szukaj aplikacji</string>
   <string name="menu_filter">Filtruj aplikacje</string>
   <string name="menu_app_user">Pokaż aplikacje użytkownika</string>
@@ -35,6 +38,7 @@
   <string name="menu_reset">Resetuj</string>
   <string name="menu_add">Dodaj</string>
   <string name="menu_delete">Usuń</string>
+  <string name="menu_cleanup">Cleanup</string>
   <string name="title_protocol">Protokół</string>
   <string name="title_dport">Port źródłowy</string>
   <string name="title_raddr">Adres docelowy</string>
@@ -72,13 +76,20 @@
   <string name="setting_filter">Filtruj ruch</string>
   <string name="setting_track_usage">Rejestruj użycie sieci</string>
   <string name="setting_reset_usage">Resetuj użycie sieci</string>
+  <string name="setting_show_resolved">Show resolved domain names</string>
   <string name="setting_block_domains">Blokuj nazwy domen</string>
   <string name="setting_forwarding">Przekierowanie portów</string>
   <string name="setting_vpn4">VPN IPv4: %s</string>
   <string name="setting_vpn6">VPN IPv6: %s</string>
   <string name="setting_dns">VPN DNS: %s</string>
+  <string name="setting_socks5_enabled">Use SOCKS5 proxy</string>
+  <string name="setting_socks5_addr">SOCKS5 address: %s</string>
+  <string name="setting_socks5_port">SOCKS5 port: %s</string>
+  <string name="setting_socks5_username">SOCKS5 username: %s</string>
+  <string name="setting_socks5_password">SOCKS5 password: %s</string>
   <string name="setting_pcap_record_size">Wielkość rekordu PCAP: %s B</string>
   <string name="setting_pcap_file_size">Maksymalna wielkość pliku PCAP: %s MB</string>
+  <string name="setting_watchdog">Watchdog: every %s minutes</string>
   <string name="setting_stats_category">Wykres prędkości</string>
   <string name="setting_stats">Pokazuj wskaźnik prędkości</string>
   <string name="setting_stats_top">Pokaż aplikacje z najwyższym transferem</string>
@@ -114,7 +125,8 @@
   <string name="summary_filter">Filtruj pakiety wychodzące z tunelu VPN. Może spowodować większe użycie baterii.</string>
   <string name="summary_track_usage">Rejestruj ilość bajtów wysłanych i odebranych dla każdej aplikacji i adresu. Może zwiększyć użycie baterii.</string>
   <string name="summary_block_domains">Odpowiadaj jako \'name error\' (NXDOMAIN) dla zablokowanych nazw domen. Przełącznik ten jest wyłączony gdy plik hosts nie jest dostępny.</string>
-  <string name="summary_proxy">SOCKS5 proxy server IP address and port number</string>
+  <string name="summary_socks5_enabled">Only TCP traffic will be sent to the proxy server</string>
+  <string name="summary_watchdog">Periodically check if NetGuard is still running (enter zero to disable this option). This might result in extra battery usage.</string>
   <string name="summary_stats">Pokazuj wykres prędkości sieci w powiadomieniach aplikacji</string>
   <string name="msg_sure">Czy jesteś pewien?</string>
   <string name="msg_started">Wymuś Reguły</string>
@@ -123,14 +135,15 @@
   <string name="msg_waiting">Czekam na zdarzenie</string>
   <string name="msg_disabled">NetGuard jest wyłączony, użyj przełącznika u góry by go uruchomić</string>
   <string name="msg_revoked">NetGuard został wyłączony, prawdopodobnie poprzez inną aplikację bazującą na VPN</string>
-  <string name="msg_error">Ze względu na błąd wewnętrzny NetGuard została wyłączony</string>
-  <string name="msg_start_failed">The Android VPN service could not be started, which is most likely caused by a bug in your Android version.
-Restarting your device or revoking the VPN permission using the Android settings from NetGuard (if possible) might (temporarily) solve this problem.</string>
   <string name="msg_installed">\'%1$s\' zainstalowane</string>
+  <string name="msg_installed_n">Has been installed</string>
   <string name="msg_access">%1$s żąda dostępu do internetu</string>
+  <string name="msg_access_n">Attempted internet access</string>
   <string name="msg_completed">Wykonano</string>
   <string name="msg_vpn">NetGuard używa lokalnego VPN aby filtrować ruch. Z tego powodu proszę umożliwić połączenie VPN w kolejnym oknie dialogowym. Twój ruch internetowy nie będzie wysyłany do zdalnego serwera VPN.</string>
   <string name="msg_autostart">NetGuard nie może zostać uruchomiony automatycznie przy starcie systemu ze względu na błąd w twojej wersji Androida</string>
+  <string name="msg_error">An unexpected error has occurred: \'%s\'</string>
+  <string name="msg_start_failed">Android refused to start the VPN service at this moment. This is likely because of a bug in your Android version.</string>
   <string name="msg_try">Wypróbuj NetGuard</string>
   <string name="msg_terms">Przekazując darowiznę wyrażam zgodę na <a href="http://www.netguard.me/#terms">terms &amp; conditions</a></string>
   <string name="msg_dimming">Jeśli nie możesz nacisnąć OK w następnym oknie, prawdopodobnie inna aplikacja zarządza ekranem (przygaszanie ekranu).</string>
@@ -143,7 +156,10 @@ Restarting your device or revoking the VPN permission using the Android settings
   <string name="msg_count">%dx</string>
   <string name="msg_doze">For consistent results, the Android battery optimizations should be disabled for NetGuard.
 \n\nIn the next dialog, select \"All apps\" at the top, tap on NetGuard in the list and select and confirm \"Don\'t optimize\".</string>
+  <string name="msg_datasaving">For consistent results, the Android data saving options should be disabled for NetGuard
+\n\nIn the next dialog, enable the options \"Background data\" and \"Unrestricted data usage\"</string>
   <string name="msg_filter">Użycie filtrowanie spowoduje, że Android przekaże sterowanie użyciem danych do NetGuard - Android będzie używał NetGuard zamiast dedykowanej aplikacji do kontroli danych</string>
+  <string name="msg_filter4">Android 4 requires filtering to be enabled</string>
   <string name="msg_log_disabled">Logowanie ruchu jest wyłączone, użyj przełącznika aby włączyć. Logowanie ruchu może zwiększyć użycie baterii.</string>
   <string name="msg_clear_rules">Spowoduje to zresetowanie reguł i warunków do wartości domyślnych</string>
   <string name="msg_reset_access">Spowoduje to usunięcie zawartości logu dostępu do internetu bez reguł zezwól/blokuj</string>
@@ -156,7 +172,10 @@ Restarting your device or revoking the VPN permission using the Android settings
   <string name="msg_metered">Sieć jest taryfowa</string>
   <string name="msg_queue">NetGuard jest zajęty</string>
   <string name="msg_update">Aktualizacja jest dostępna, stuknij aby pobrać</string>
-  <string name="msg_system">Managing system applications can be enabled in the advanced options</string>
+  <string name="msg_usage">You can allow (greenish) or deny (reddish) Wi-Fi or mobile internet access to by tapping on the icons next to an application</string>
+  <string name="msg_whitelist">Internet access is allowed by default (blacklist mode), this can be changed in the settings</string>
+  <string name="msg_push">Incoming (push) messages are mostly handled by the system component Play services, which is allowed internet access by default</string>
+  <string name="msg_system">Managing all (system) applications can be enabled in the settings</string>
   <string name="msg_issue">Please describe the problem and indicate the time of the problem:</string>
   <string name="title_unmetered_allowed">Połączenia nietaryfowe są dozwolone</string>
   <string name="title_unmetered_blocked">Połączenia nietaryfowe są zablokowane</string>
@@ -167,25 +186,27 @@ Restarting your device or revoking the VPN permission using the Android settings
   <string name="title_interactive_allowed">Zezwól gdy ekran jest włączony</string>
   <string name="title_roaming_blocked">Blokuj gdy roaming</string>
   <string name="title_metered">Domyślnie połączenie Wi-Fi jest uważane za nietaryfowe a połączenie komórkowe za taryfowe</string>
+  <string name="title_internet">brak uprawnień do Internetu</string>
+  <string name="title_disabled">jest niesprawny</string>
   <string name="title_apply">Zastosuj reguły i warunki</string>
   <string name="title_conditions">Warunki</string>
   <string name="title_screen_wifi">Zezwól na Wi-Fi przy włączonym ekranie</string>
   <string name="title_screen_other">Zezwól komórkowe przy włączonym ekranie</string>
   <string name="title_roaming_symbol">R</string>
   <string name="title_roaming">Blokuj gdy roaming</string>
-  <string name="title_disabled">jest niesprawny</string>
-  <string name="title_internet">brak uprawnień do Internetu</string>
   <string name="title_related">Powiązane z filtrowaniem</string>
   <string name="title_access">Próby dostępu</string>
   <string name="title_no_log"><u>Logowanie nie jest włączone</u></string>
+  <string name="title_no_filter"><u>Filtering is not enabled</u></string>
   <string name="title_precedence">Reguły dostępu mają pierwszeństwo przed innymi regułami</string>
+  <string name="title_options">Options</string>
+  <string name="title_notify">Powiadom o próbach dostępu do internetu</string>
   <string name="title_rate">Oceń</string>
   <string name="title_allow">Zezwól</string>
   <string name="title_block">Blokuj</string>
   <string name="title_root">root</string>
   <string name="title_mediaserver">mediaserver</string>
   <string name="title_nobody">nobody</string>
-  <string name="title_notify">Powiadom o próbach dostępu do internetu</string>
   <string name="title_dontask">Don\'t ask again</string>
   <string name="title_log_whois">Whois %1$s</string>
   <string name="title_log_port">Port %1$d</string>
@@ -197,8 +218,11 @@ Restarting your device or revoking the VPN permission using the Android settings
   <string name="title_pro_speed">Wykres prędkości sieci w powiadomieniach</string>
   <string name="title_pro_theme">Wygląd (motyw, kolor)</string>
   <string name="title_pro_all">Wszystkie powyższe cechy Pro</string>
-  <string name="title_pro_buy">Pokaż</string>
+  <string name="title_pro_dev">Support development</string>
+  <string name="title_pro_buy">Buy</string>
   <string name="title_pro_bought">Włączone</string>
+  <string name="title_pro_details">Tap on a title for more information</string>
+  <string name="title_pro_ads">Buying any pro feature will disable all advertisements</string>
   <string name="title_pro_challenge">Wezwanie</string>
   <string name="title_pro_reponse">Odpowiedź</string>
   <string-array name="themeNames">

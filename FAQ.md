@@ -10,12 +10,12 @@ Frequently Asked Questions (FAQ)
 **(0) How do I use NetGuard?**
 
 * Enable the firewall using the switch in the action bar
-* Allow/deny Wi-Fi/mobile internet access using the icons along the right side of the application list
+* Allow (greenish) or deny (reddish) Wi-Fi or mobile internet access using the icons next to an application
 
 You can use the settings menu to change from blacklist mode (allow all in *Settings* but block unwanted applications in list) to whitelist mode (block all in *Settings* but allow favorite applications in list).
 
 * Red/orange/yellow/amber = internet access denied
-* Teal/blue/purple/grey = internet access allowd
+* Teal/blue/purple/grey = internet access allowed
 
 <a name="FAQ1"></a>
 **(1) Can NetGuard completely protect my privacy?**
@@ -26,6 +26,8 @@ This is the trade-off required to make a firewall which does not require root ac
 The firewall can only start when Android "allows" it to start,
 so it will not offer protection during early boot-up (although your network may not be loaded at that time).
 It will, however, be much better than nothing, especially if you are not rebooting often.
+
+Android N will allow NetGuard to be an [Always-On VPN](https://developer.android.com/preview/features/afw.html#always-on-vpn).
 
 If you want to protect yourself more, you can (at least in theory) disable Wi-Fi and mobile data before rebooting,
 and only enable them on reboot, after the firewall service has started (and the small key icon is visible in the status bar).
@@ -41,8 +43,9 @@ then no, because NetGuard needs to use this service. Android allows only one app
 <a name="FAQ3"></a>
 **(3) Can I use NetGuard on any Android version?**
 
-No, the minimum required Android version is 4.0 (Lollipop)
-because NetGuard uses the [addDisallowedApplication](http://developer.android.com/reference/android/net/VpnService.Builder.html#addDisallowedApplication(java.lang.String)) method.
+No, the minimum required Android version is 4.0 (KitKat)
+because NetGuard uses the [Android VPN service](https://developer.android.com/reference/android/net/VpnService.html),
+which was added in Android 4.0.
 
 <a name="FAQ4"></a>
 **(4) Will NetGuard use extra battery power?**
@@ -151,12 +154,13 @@ is incorrectly attributed to NetGuard instead to the Google Play™ store app.
 NetGuard requires at least Android 4.0, so it is not available in the Google Play™ store app for devices running older Android versions.
 
 <a name="FAQ19"></a>
-**(19) Why does aplication XYZ still have internet access?**
+**(19) Why does application XYZ still have internet access?**
 
 If you block internet access for an application, there is no way around it.
-However, applications could access the internet through other applications.
-Google Play services is handling push messages for most applications for example.
+However, applications could access the internet through other (system) applications.
+Google Play services is handling incoming push messages for most applications for example.
 You can prevent this by blocking internet access for the other application as well.
+This can best be diagnosed by checking the global access log (three dot menu, Show log).
 
 Note that some applications keep trying to access the internet, which is done by sending a connection request packet.
 This packet goes into the VPN sinkhole when internet access for the application is blocked.
@@ -271,7 +275,7 @@ You can find all predefined rules [here](https://github.com/M66B/NetGuard/blob/m
 <a name="FAQ29"></a>
 **(29) Why do I get 'The item you requested is not available for purchase'?**
 
-You can only purchase pro feature when you installed NetGuard from the Play store.
+You can only purchase pro features when you installed NetGuard from the Play store.
 
 <a name="FAQ30"></a>
 **(30) Can I also run AFWall+ on the same device?**
@@ -279,7 +283,7 @@ You can only purchase pro feature when you installed NetGuard from the Play stor
 Unless you are just testing NetGuard, there is no current reason to use them both, since they cover the same function (firewall),
 although with different base needs (AFWall+ needs a rooted device) and ways of doing their thing (AFWall+ uses iptables).
 
-Also you need to keep per applicaton access rules _always_ in sync,
+Also you need to keep per application access rules _always_ in sync,
 else the application will not be able to access the network,
 hence bringing another level of complexity when setting and assuring things work out.
 
@@ -314,10 +318,13 @@ however they need to be generally usable to be included.
 As a workaround you can use the export/import function to apply specific settings in specific circumstances.
 
 <a name="FAQ34"></a>
-**(34) Can you add the condition 'when on foreground'?**
+**(34) Can you add a condition 'when on foreground' or 'when active'?**
 
-Recent Android versions do not allow an application to query if other applications are in the foreground or background anymore,
-so this cannot be added. You can use the condition '*when screen is on*' instead.
+Recent Android versions do not allow an application to query if other applications are in the foreground/background or active/inactive
+without holding an [additional privacy violating permission](https://developer.android.com/reference/android/Manifest.permission.html#PACKAGE_USAGE_STATS)
+and at the expense of extra battery usage (because periodic polling is required) anymore,
+so this cannot be added without significant disadvantages, like [this one](http://www.xda-developers.com/working-as-intended-an-exploration-into-androids-accessibility-lag/).
+You can use the condition '*when screen is on*' instead.
 
 <a name="FAQ35"></a>
 **(35) Why does the VPN not start?**
@@ -346,14 +353,106 @@ The right question is "*why are there so many taxes and fees*":
 
 So, what is left for the developer is just a fraction of what you pay.
 
-Despite NetGuard being *really* a lot of work, only some of the convenience and advanced features are paid,
-which means that NetGuard is basically free to use.
+Despite NetGuard being *really* a lot of work, only some of the convenience and advanced features needs to be purchased,
+which means that NetGuard is basically free to use
+and that you don't need to pay anything to reduce your data usage, increase battery life and increase your privacy.
 
-Also note that most free applications will appear not to be sustainable in the end, whereas NetGuard is properly maintained and supported.
+Also note that most free applications will appear not to be sustainable in the end, whereas NetGuard is properly maintained and supported,
+and that free applications may have a catch, like sending privacy sensitive information to the internet.
+
+See [here](http://forum.xda-developers.com/showpost.php?p=67892427&postcount=3030) for some more information.
+
+<a name="FAQ38"></a>
+**(38) Why did NetGuard stop running?**
+
+On most devices, NetGuard will keep running in the background with its foreground service.
+On some devices (in particular some Samsung models), where there are lots of applications competing for memory, Android may still stop NetGuard as a last resort.
+Unfortunately this cannot be fixed from NetGuard, and can be considered a shortcoming of the device and/or as a bug in Android.
+You can workaround this problem by enabling the watchdog in the NetGuard advanced options to check every 10-15 minutes.
+
+<a name="FAQ39"></a>
+**(39) How does a VPN based firewall differ from a iptables based firewall?**
+
+See this [Stack Exchange question](http://android.stackexchange.com/questions/152087/any-security-difference-between-root-based-firewall-afwall-and-non-root-based).
+
+<a name="FAQ40"></a>
+**(40) Can you add schedules?**
+
+Besides not being trivial to add, schedule are in my opion not a good idea, since time is not a good rule condition.
+A rule condition like *When screen is on* is a better and more straightforward condition.
+Therefore schedules will not be added, but you are welcome to propose other new conditions.
+
+<a name="FAQ41"></a>
+**(41) Can you add wildcards?**
+
+Wildcards to allow/block addresses would have a significant performance and usability impact and will therefore not be added.
+
+<a name="FAQ42"></a>
+**(42) Why is permission ... needed?**
+
+* INTERNET ('*Full network access*'): to forward allowed (filtered) traffic to the internet
+* ACCESS_NETWORK_STATE ('*View network connections*'): to check if the device is connected to the internet through Wi-Fi
+* READ_PHONE_STATE ('*Device ID & call information*'): to detect mobile network changes, see [here](http://forum.xda-developers.com/showpost.php?p=64107371&postcount=489) for more details
+* ACCESS_WIFI_STATE ('*Wi-Fi connection information*'): to detect Wi-Fi network changes
+* RECEIVE_BOOT_COMPLETED ('*Run at startup*'): to start the firewall when booting the device
+* WAKE_LOCK ('*Prevent device from sleeping*'): to reliably reload rules in the background on connectivity changes
+* READ/WRITE_EXTERNAL_STORAGE ('*Photos/Media/Files*'): to export/import settings on Android versions before 4.4 (KitKat) (there is no need to grant this permission on later Android versions)
+* VIBRATE: to give feedback on widget tap
+* BILLING: to use in-app billing
+
+<a name="FAQ43"></a>
+**(43) I get 'This app is causing your device to run slowly'**
+
+This message is displayed by the *Smart Manager*,
+but actually it is the 'Smart' Manager application itself which is causing delays and lags.
+Some links:
+
+* [Smart Manager complaining about LastPass](https://www.reddit.com/r/GalaxyS6/comments/3htu2y/smart_manager_cmoplaining_about_lastpass/)
+* [Disable Smart Manager?](http://forums.androidcentral.com/samsung-galaxy-s4/595483-disable-smart-manager.html)
+
+<a name="FAQ44"></a>
+**(44) I don't get notifications on access**
+
+To prevent a high number of status bar notifications, notify on access is done only once per domain name per application.
+Access to domain names shown in the application access log (drill down the NetGuard application settings) will not be notified again,
+even if you just enabled notify on access.
+To get notified for all domain names again, you can clear the application access log using the waste bin icon.
+If you want to clear all applications logs, you can export and import your settings.
+
+<a name="FAQ45"></a>
+**(45) Does NetGuard handle incoming connections?**
+
+The Android VPN service handles outgoing connections only (from applications to the internet), so incoming connections are normally left alone.
+
+If you want to run a server application on Android, then be aware that using port numbers below 1024 requires root permissions
+and that some Android versions contain routing bugs, causing inbound traffic incorrectly being routed into the VPN.
+
+<a name="FAQ46"></a>
+**(46) Can I get a refund?**
+
+If a purchased pro feature doesn't work [as described](https://www.netguard.me/) while the free features of NetGuard work properly
+and I cannot fix the issue in a timely manner, you can get a refund.
+In all other cases there is no refund possible.
+I take my responsibility as seller to deliver what has been promised and I expect that you to take responsibility for informing yourself of what you are buying.
+
+<a name="FAQ47"></a>
+**(47) Why are there in application advertisements?**
+
+Developing NetGuard was quite a challenge and [really a lot of work](https://www.openhub.net/p/netguard/estimated_cost), but fun to do.
+A good product deserves good support, which means in practice that I am spending 30-60 minutes each and every day answering questions and solving problems.
+Just about 1 in 1000 downloaders purchase any of the pro features, so support is basically one way.
+This is not maintainable in the long run and this is why advertisements were added.
+Purchasing any of the pro features will completely disable advertisements and help keep the project going.
+
+<a name="FAQ48"></a>
+**(48) Why are some domain names blocked while they are set to be allowed?**
+
+NetGuard blocks traffic based on the IP addresses an application is trying to connect to.
+If more than one domain name is on the same IP, they cannot be distinguished.
+If you set different rules for 2 domains which resolve to the same IP, both will be blocked.
+
+Thanks @[pulser](https://github.com/pulser/)
 
 <br />
 
 **If you didn't find the answer to your question, you can ask your questions [in this forum](http://forum.xda-developers.com/showthread.php?t=3233012) or contact me directly [by e-mail](mailto:marcel+netguard@faircode.eu)**.
-
-If you want to request a new feature or want to report a bug, please [create an issue on GitHub](https://github.com/M66B/NetGuard/issues/new).
-

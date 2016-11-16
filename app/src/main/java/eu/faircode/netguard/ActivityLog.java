@@ -299,6 +299,7 @@ public class ActivityLog extends AppCompatActivity implements SharedPreferences.
     @Override
     protected void onDestroy() {
         running = false;
+        adapter = null;
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
         super.onDestroy();
     }
@@ -376,7 +377,6 @@ public class ActivityLog extends AppCompatActivity implements SharedPreferences.
         menu.findItem(R.id.menu_refresh).setEnabled(!menu.findItem(R.id.menu_log_live).isChecked());
         menu.findItem(R.id.menu_log_resolve).setChecked(prefs.getBoolean("resolve", false));
         menu.findItem(R.id.menu_log_organization).setChecked(prefs.getBoolean("organization", false));
-        menu.findItem(R.id.menu_pcap_enabled).setEnabled(prefs.getBoolean("filter", false));
         menu.findItem(R.id.menu_pcap_enabled).setChecked(prefs.getBoolean("pcap", false));
         menu.findItem(R.id.menu_pcap_export).setEnabled(pcap_file.exists() && export);
 
@@ -578,7 +578,6 @@ public class ActivityLog extends AppCompatActivity implements SharedPreferences.
                     return null;
                 } catch (Throwable ex) {
                     Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                    Util.sendCrashReport(ex, ActivityLog.this);
                     return ex;
                 } finally {
                     if (out != null)

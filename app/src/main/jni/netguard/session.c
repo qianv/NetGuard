@@ -19,33 +19,33 @@
 
 #include "netguard.h"
 
-int ebadf = 0;
-
 extern JavaVM *jvm;
+extern int pipefds[2];
 extern pthread_t thread_id;
 extern pthread_mutex_t lock;
-extern jboolean stopping;
-extern jboolean signaled;
 
-extern struct icmp_session *icmp_session;
-extern struct udp_session *udp_session;
-extern struct tcp_session *tcp_session;
+struct ng_session *ng_session = NULL;
 
-void handle_signal(int sig, siginfo_t *info, void *context) {
-    log_android(ANDROID_LOG_DEBUG, "Signal %d", sig);
-    signaled = 1;
+void init(const struct arguments *args) {
+    ng_session = NULL;
+}
+
+void clear() {
+    struct ng_session *s = ng_session;
+    while (s != NULL) {
+        if (s->socket >= 0 && close(s->socket))
+            log_android(ANDROID_LOG_ERROR, "close %d error %d: %s",
+                        s->socket, errno, strerror(errno));
+        if (s->protocol == IPPROTO_TCP)
+            clear_tcp_data(&s->tcp);
+        struct ng_session *p = s;
+        s = s->next;
+        free(p);
+    }
+    ng_session = NULL;
 }
 
 void *handle_events(void *a) {
-    int sdk;
-    fd_set rfds;
-    fd_set wfds;
-    fd_set efds;
-    struct timespec ts;
-    sigset_t blockset;
-    sigset_t emptyset;
-    struct sigaction sa;
-
     struct arguments *args = (struct arguments *) a;
     log_android(ANDROID_LOG_WARN, "Start events tun=%d thread %x", args->tun, thread_id);
 
@@ -58,156 +58,228 @@ void *handle_events(void *a) {
     }
     args->env = env;
 
-    // Get SDK version
-    sdk = sdk_int(env);
-
+    // Get max sessions
     int maxsessions = 1024;
     struct rlimit rlim;
     if (getrlimit(RLIMIT_NOFILE, &rlim))
         log_android(ANDROID_LOG_WARN, "getrlimit error %d: %s", errno, strerror(errno));
     else {
-        maxsessions = (int) (rlim.rlim_cur * 50 / 100);
+        maxsessions = (int) (rlim.rlim_cur * 75 / 100);
         log_android(ANDROID_LOG_WARN, "getrlimit soft %d hard %d max sessions %d",
                     rlim.rlim_cur, rlim.rlim_max, maxsessions);
     }
-    if (maxsessions > FD_SETSIZE)
-        maxsessions = FD_SETSIZE;
-
-    // Block SIGUSR1
-    sigemptyset(&blockset);
-    sigaddset(&blockset, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &blockset, NULL);
-
-    /// Handle SIGUSR1
-    sa.sa_sigaction = handle_signal;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    sigaction(SIGUSR1, &sa, NULL);
 
     // Terminate existing sessions not allowed anymore
     check_allowed(args);
 
-    stopping = 0;
-    signaled = 0;
-    ebadf = 0;
+    int stopping = 0;
+
+    // Open epoll file
+    int epoll_fd = epoll_create(1);
+    if (epoll_fd < 0) {
+        log_android(ANDROID_LOG_ERROR, "epoll create error %d: %s", errno, strerror(errno));
+        report_exit(args, "epoll create error %d: %s", errno, strerror(errno));
+        stopping = 1;
+    }
+
+    // Monitor stop events
+    struct epoll_event ev_pipe;
+    memset(&ev_pipe, 0, sizeof(struct epoll_event));
+    ev_pipe.events = EPOLLIN | EPOLLERR;
+    ev_pipe.data.ptr = &ev_pipe;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, pipefds[0], &ev_pipe)) {
+        log_android(ANDROID_LOG_ERROR, "epoll add pipe error %d: %s", errno, strerror(errno));
+        report_exit(args, "epoll add pipe error %d: %s", errno, strerror(errno));
+        stopping = 1;
+    }
+
+    // Monitor tun events
+    struct epoll_event ev_tun;
+    memset(&ev_tun, 0, sizeof(struct epoll_event));
+    ev_tun.events = EPOLLIN | EPOLLERR;
+    ev_tun.data.ptr = NULL;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, args->tun, &ev_tun)) {
+        log_android(ANDROID_LOG_ERROR, "epoll add tun error %d: %s", errno, strerror(errno));
+        report_exit(args, "epoll add tun error %d: %s", errno, strerror(errno));
+        stopping = 1;
+    }
 
     // Loop
+    long long last_check = 0;
     while (!stopping) {
         log_android(ANDROID_LOG_DEBUG, "Loop thread %x", thread_id);
 
+        int recheck = 0;
+        int timeout = EPOLL_TIMEOUT;
+
         // Count sessions
-        int isessions = get_icmp_sessions();
-        int usessions = get_udp_sessions();
-        int tsessions = get_tcp_sessions();
+        int isessions = 0;
+        int usessions = 0;
+        int tsessions = 0;
+        struct ng_session *s = ng_session;
+        while (s != NULL) {
+            if (s->protocol == IPPROTO_ICMP || s->protocol == IPPROTO_ICMPV6) {
+                if (!s->icmp.stop)
+                    isessions++;
+            }
+            else if (s->protocol == IPPROTO_UDP) {
+                if (s->udp.state == UDP_ACTIVE)
+                    usessions++;
+            }
+            else if (s->protocol == IPPROTO_TCP) {
+                if (s->tcp.state != TCP_CLOSING && s->tcp.state != TCP_CLOSE)
+                    tsessions++;
+                if (s->socket >= 0)
+                    recheck = recheck | monitor_tcp_session(args, s, epoll_fd);
+            }
+            s = s->next;
+        }
         int sessions = isessions + usessions + tsessions;
 
         // Check sessions
-        check_icmp_sessions(args, sessions, maxsessions);
-        check_udp_sessions(args, sessions, maxsessions);
-        check_tcp_sessions(args, sessions, maxsessions);
+        long long ms = get_ms();
+        if (ms - last_check > EPOLL_MIN_CHECK) {
+            last_check = ms;
 
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=1093893
-        int idle = (tsessions + usessions + tsessions == 0 && sdk >= 16);
-        log_android(ANDROID_LOG_DEBUG, "sessions ICMP %d UDP %d TCP %d max %d/%d idle %d sdk %d",
-                    isessions, usessions, tsessions, sessions, maxsessions, idle, sdk);
+            time_t now = time(NULL);
+            struct ng_session *sl = NULL;
+            s = ng_session;
+            while (s != NULL) {
+                int del = 0;
+                if (s->protocol == IPPROTO_ICMP || s->protocol == IPPROTO_ICMPV6) {
+                    del = check_icmp_session(args, s, sessions, maxsessions);
+                    if (!s->icmp.stop && !del) {
+                        int stimeout = s->icmp.time +
+                                       get_icmp_timeout(&s->icmp, sessions, maxsessions) - now + 1;
+                        if (stimeout > 0 && stimeout < timeout)
+                            timeout = stimeout;
+                    }
+                }
+                else if (s->protocol == IPPROTO_UDP) {
+                    del = check_udp_session(args, s, sessions, maxsessions);
+                    if (s->udp.state == UDP_ACTIVE && !del) {
+                        int stimeout = s->udp.time +
+                                       get_udp_timeout(&s->udp, sessions, maxsessions) - now + 1;
+                        if (stimeout > 0 && stimeout < timeout)
+                            timeout = stimeout;
+                    }
+                }
+                else if (s->protocol == IPPROTO_TCP) {
+                    del = check_tcp_session(args, s, sessions, maxsessions);
+                    if (s->tcp.state != TCP_CLOSING && s->tcp.state != TCP_CLOSE && !del) {
+                        int stimeout = s->tcp.time +
+                                       get_tcp_timeout(&s->tcp, sessions, maxsessions) - now + 1;
+                        if (stimeout > 0 && stimeout < timeout)
+                            timeout = stimeout;
+                    }
+                }
 
-        // Next event time
-        ts.tv_sec = (sdk < 16 ? 5 : get_select_timeout(sessions, maxsessions));
-        ts.tv_nsec = 0;
-        sigemptyset(&emptyset);
+                if (del) {
+                    if (sl == NULL)
+                        ng_session = s->next;
+                    else
+                        sl->next = s->next;
 
-        // Check if tun is writable
-        FD_ZERO(&rfds);
-        FD_ZERO(&wfds);
-        FD_ZERO(&efds);
-        FD_SET(args->tun, &wfds);
-        if (pselect(args->tun + 1, &rfds, &wfds, &efds, &ts, &emptyset) == 0) {
-            log_android(ANDROID_LOG_WARN, "tun not writable");
-            continue;
+                    struct ng_session *c = s;
+                    s = s->next;
+                    if (c->protocol == IPPROTO_TCP)
+                        clear_tcp_data(&c->tcp);
+                    free(c);
+                } else {
+                    sl = s;
+                    s = s->next;
+                }
+            }
+        }
+        else {
+            recheck = 1;
+            log_android(ANDROID_LOG_DEBUG, "Skipped session checks");
         }
 
-        // Select
-        int max = get_selects(args, &rfds, &wfds, &efds);
-        int ready = pselect(max + 1, &rfds, &wfds, &efds, idle ? NULL : &ts, &emptyset);
+        log_android(ANDROID_LOG_DEBUG,
+                    "sessions ICMP %d UDP %d TCP %d max %d/%d timeout %d recheck %d",
+                    isessions, usessions, tsessions, sessions, maxsessions, timeout, recheck);
+
+        // Poll
+        struct epoll_event ev[EPOLL_EVENTS];
+        int ready = epoll_wait(epoll_fd, ev, EPOLL_EVENTS,
+                               recheck ? EPOLL_MIN_CHECK : timeout * 1000);
 
         if (ready < 0) {
             if (errno == EINTR) {
-                if (stopping && signaled) { ;
-                    log_android(ANDROID_LOG_WARN,
-                                "pselect signaled tun %d thread %x", args->tun, thread_id);
-                    report_exit(args, NULL);
-                    break;
-                } else {
-                    log_android(ANDROID_LOG_DEBUG,
-                                "pselect interrupted tun %d thread %x", args->tun, thread_id);
-                    continue;
-                }
-            } else if (errno == EBADF) {
-                struct stat sb;
-                if (fstat(args->tun, &sb) < 0) {
-                    log_android(ANDROID_LOG_ERROR,
-                                "tun socket %d select error %d: %s",
-                                args->tun, errno, strerror(errno));
-                    report_exit(args, "tun socket %d select error %d: %s",
-                                args->tun, errno, strerror(errno));
-                    break;
-                }
-                else {
-                    if (ebadf++ < 10) {
-                        log_android(ANDROID_LOG_WARN, "pselect EBADF, try %d", ebadf);
-                        continue;
-                    } else {
-                        report_exit(args, "pselect error %d: %s", errno, strerror(errno));
-                        break;
-                    }
-                }
+                log_android(ANDROID_LOG_DEBUG,
+                            "epoll interrupted tun %d thread %x", args->tun, thread_id);
+                continue;
             } else {
                 log_android(ANDROID_LOG_ERROR,
-                            "pselect tun %d thread %x error %d: %s",
+                            "epoll tun %d thread %x error %d: %s",
                             args->tun, thread_id, errno, strerror(errno));
-                report_exit(args, "pselect tun %d thread %x error %d: %s",
+                report_exit(args, "epoll tun %d thread %x error %d: %s",
                             args->tun, thread_id, errno, strerror(errno));
                 break;
             }
         }
 
         if (ready == 0)
-            log_android(ANDROID_LOG_DEBUG, "pselect timeout");
+            log_android(ANDROID_LOG_DEBUG, "epoll timeout");
         else {
-            log_android(ANDROID_LOG_DEBUG, "pselect ready %d", ready);
 
             if (pthread_mutex_lock(&lock))
                 log_android(ANDROID_LOG_ERROR, "pthread_mutex_lock failed");
 
-#ifdef PROFILE_EVENTS
-            struct timeval start, end;
-            float mselapsed;
-            gettimeofday(&start, NULL);
-#endif
-
-            // Check upstream
             int error = 0;
-            if (check_tun(args, &rfds, &wfds, &efds, sessions, maxsessions) < 0)
-                error = 1;
-            else {
-#ifdef PROFILE_EVENTS
-                gettimeofday(&end, NULL);
-                mselapsed = (end.tv_sec - start.tv_sec) * 1000.0 +
-                            (end.tv_usec - start.tv_usec) / 1000.0;
-                if (mselapsed > PROFILE_EVENTS)
-                    log_android(ANDROID_LOG_WARN, "tun %f", mselapsed);
 
-                gettimeofday(&start, NULL);
-#endif
+            for (int i = 0; i < ready; i++) {
+                if (ev[i].data.ptr == &ev_pipe) {
+                    // Check pipe
+                    stopping = 1;
+                    uint8_t buffer[1];
+                    if (read(pipefds[0], buffer, 1) < 0)
+                        log_android(ANDROID_LOG_WARN, "Read pipe error %d: %s",
+                                    errno, strerror(errno));
+                    else
+                        log_android(ANDROID_LOG_WARN, "Read pipe");
+                    break;
 
-                // Check ICMP downstream
-                check_icmp_sockets(args, &rfds, &wfds, &efds);
+                } else if (ev[i].data.ptr == NULL) {
+                    // Check upstream
+                    log_android(ANDROID_LOG_DEBUG, "epoll ready %d/%d in %d out %d err %d hup %d",
+                                i, ready,
+                                (ev[i].events & EPOLLIN) != 0,
+                                (ev[i].events & EPOLLOUT) != 0,
+                                (ev[i].events & EPOLLERR) != 0,
+                                (ev[i].events & EPOLLHUP) != 0);
 
-                // Check UDP downstream
-                check_udp_sockets(args, &rfds, &wfds, &efds);
+                    while (!error && is_readable(args->tun))
+                        if (check_tun(args, &ev[i], epoll_fd, sessions, maxsessions) < 0)
+                            error = 1;
 
-                // Check TCP downstream
-                check_tcp_sockets(args, &rfds, &wfds, &efds);
+                } else {
+                    // Check downstream
+                    log_android(ANDROID_LOG_DEBUG,
+                                "epoll ready %d/%d in %d out %d err %d hup %d prot %d sock %d",
+                                i, ready,
+                                (ev[i].events & EPOLLIN) != 0,
+                                (ev[i].events & EPOLLOUT) != 0,
+                                (ev[i].events & EPOLLERR) != 0,
+                                (ev[i].events & EPOLLHUP) != 0,
+                                ((struct ng_session *) ev[i].data.ptr)->protocol,
+                                ((struct ng_session *) ev[i].data.ptr)->socket);
+
+                    struct ng_session *session = (struct ng_session *) ev[i].data.ptr;
+                    if (session->protocol == IPPROTO_ICMP ||
+                        session->protocol == IPPROTO_ICMPV6)
+                        check_icmp_socket(args, &ev[i]);
+                    else if (session->protocol == IPPROTO_UDP) {
+                        while (!(ev[i].events & EPOLLERR) && (ev[i].events & EPOLLIN) &&
+                               is_readable(session->socket))
+                            check_udp_socket(args, &ev[i]);
+                    } else if (session->protocol == IPPROTO_TCP)
+                        check_tcp_socket(args, &ev[i], epoll_fd);
+                }
+
+                if (error)
+                    break;
             }
 
             if (pthread_mutex_unlock(&lock))
@@ -215,16 +287,13 @@ void *handle_events(void *a) {
 
             if (error)
                 break;
-
-#ifdef PROFILE_EVENTS
-            gettimeofday(&end, NULL);
-            mselapsed = (end.tv_sec - start.tv_sec) * 1000.0 +
-                        (end.tv_usec - start.tv_usec) / 1000.0;
-            if (mselapsed > PROFILE_EVENTS)
-                log_android(ANDROID_LOG_WARN, "sockets %f", mselapsed);
-#endif
         }
     }
+
+    // Close epoll file
+    if (epoll_fd >= 0 && close(epoll_fd))
+        log_android(ANDROID_LOG_ERROR,
+                    "epoll close error %d: %s", errno, strerror(errno));
 
     (*env)->DeleteGlobalRef(env, args->instance);
 
@@ -241,226 +310,93 @@ void *handle_events(void *a) {
     return NULL;
 }
 
-int get_select_timeout(int sessions, int maxsessions) {
-    time_t now = time(NULL);
-    int timeout = SELECT_TIMEOUT;
-
-    struct icmp_session *i = icmp_session;
-    while (i != NULL) {
-        if (!i->stop) {
-            int stimeout = i->time + get_icmp_timeout(i, sessions, maxsessions) - now + 1;
-            if (stimeout > 0 && stimeout < timeout)
-                timeout = stimeout;
-        }
-        i = i->next;
-    }
-
-    struct udp_session *u = udp_session;
-    while (u != NULL) {
-        if (u->state == UDP_ACTIVE) {
-            int stimeout = u->time + get_udp_timeout(u, sessions, maxsessions) - now + 1;
-            if (stimeout > 0 && stimeout < timeout)
-                timeout = stimeout;
-        }
-        u = u->next;
-    }
-
-    struct tcp_session *t = tcp_session;
-    while (t != NULL) {
-        if (t->state != TCP_CLOSING && t->state != TCP_CLOSE) {
-            int stimeout = t->time + get_tcp_timeout(t, sessions, maxsessions) - now + 1;
-            if (stimeout > 0 && stimeout < timeout)
-                timeout = stimeout;
-        }
-        t = t->next;
-    }
-
-    return timeout;
-}
-
-int get_selects(const struct arguments *args, fd_set *rfds, fd_set *wfds, fd_set *efds) {
-    struct stat sb;
-
-    // Initialize
-    FD_ZERO(rfds);
-    FD_ZERO(wfds);
-    FD_ZERO(efds);
-
-    // Always select tun
-    FD_SET(args->tun, rfds);
-    FD_SET(args->tun, efds);
-    int max = args->tun;
-
-    // Select ICMP sockets
-    struct icmp_session *i = icmp_session;
-    while (i != NULL) {
-        if (!i->stop) {
-            if (fstat(i->socket, &sb) < 0) {
-                log_android(ANDROID_LOG_WARN, "ICMP socket %d select error %d: %s",
-                            i->socket, errno, strerror(errno));
-                i->stop = 1;
-            } else {
-                FD_SET(i->socket, efds);
-                FD_SET(i->socket, rfds);
-                if (i->socket > max)
-                    max = i->socket;
-            }
-        }
-        i = i->next;
-    }
-
-    // Select UDP sockets
-    struct udp_session *u = udp_session;
-    while (u != NULL) {
-        if (u->state == UDP_ACTIVE) {
-            if (fstat(u->socket, &sb) < 0) {
-                log_android(ANDROID_LOG_WARN, "UDP socket %d select error %d: %s",
-                            u->socket, errno, strerror(errno));
-                u->state = UDP_FINISHING;
-            }
-            else {
-                FD_SET(u->socket, efds);
-                FD_SET(u->socket, rfds);
-                if (u->socket > max)
-                    max = u->socket;
-            }
-        }
-        u = u->next;
-    }
-
-    // Select TCP sockets
-    struct tcp_session *t = tcp_session;
-    while (t != NULL) {
-        // Select sockets
-        if (t->socket >= 0) {
-            if (fstat(t->socket, &sb) < 0) {
-                log_android(ANDROID_LOG_WARN, "TCP socket %d select error %d: %s",
-                            t->socket, errno, strerror(errno));
-                write_rst(args, t);
-            }
-            else {
-                if (t->state == TCP_LISTEN) {
-                    // Check for errors
-                    FD_SET(t->socket, efds);
-
-                    // Check for connected = writable
-                    FD_SET(t->socket, wfds);
-
-                    if (t->socket > max)
-                        max = t->socket;
-                }
-                else if (t->state == TCP_ESTABLISHED || t->state == TCP_CLOSE_WAIT) {
-                    // Check errors
-                    FD_SET(t->socket, efds);
-
-                    // Check for incoming data
-                    if (get_send_window(t) > 0)
-                        FD_SET(t->socket, rfds);
-
-                    // Check for outgoing data
-                    if (t->forward != NULL)
-                        FD_SET(t->socket, wfds);
-
-                    if (t->socket > max)
-                        max = t->socket;
-                }
-            }
-        }
-
-        t = t->next;
-    }
-
-    return max;
-}
-
 void check_allowed(const struct arguments *args) {
     char source[INET6_ADDRSTRLEN + 1];
     char dest[INET6_ADDRSTRLEN + 1];
 
-    struct icmp_session *i = icmp_session;
-    while (i != NULL) {
-        if (!i->stop) {
-            if (i->version == 4) {
-                inet_ntop(AF_INET, &i->saddr.ip4, source, sizeof(source));
-                inet_ntop(AF_INET, &i->daddr.ip4, dest, sizeof(dest));
-            }
-            else {
-                inet_ntop(AF_INET6, &i->saddr.ip6, source, sizeof(source));
-                inet_ntop(AF_INET6, &i->daddr.ip6, dest, sizeof(dest));
+    struct ng_session *l = NULL;
+    struct ng_session *s = ng_session;
+    while (s != NULL) {
+        if (s->protocol == IPPROTO_ICMP || s->protocol == IPPROTO_ICMPV6) {
+            if (!s->icmp.stop) {
+                if (s->icmp.version == 4) {
+                    inet_ntop(AF_INET, &s->icmp.saddr.ip4, source, sizeof(source));
+                    inet_ntop(AF_INET, &s->icmp.daddr.ip4, dest, sizeof(dest));
+                }
+                else {
+                    inet_ntop(AF_INET6, &s->icmp.saddr.ip6, source, sizeof(source));
+                    inet_ntop(AF_INET6, &s->icmp.daddr.ip6, dest, sizeof(dest));
+                }
+
+                jobject objPacket = create_packet(
+                        args, s->icmp.version, IPPROTO_ICMP, "",
+                        source, 0, dest, 0, "", s->icmp.uid, 0);
+                if (is_address_allowed(args, objPacket) == NULL) {
+                    s->icmp.stop = 1;
+                    log_android(ANDROID_LOG_WARN, "ICMP terminate %d uid %d",
+                                s->socket, s->icmp.uid);
+                }
             }
 
-            jobject objPacket = create_packet(
-                    args, i->version, IPPROTO_ICMP, "",
-                    source, 0, dest, 0, "", i->uid, 0);
-            if (is_address_allowed(args, objPacket) == NULL) {
-                i->stop = 1;
-                log_android(ANDROID_LOG_WARN, "ICMP terminate %d uid %d", i->socket, i->uid);
+        } else if (s->protocol == IPPROTO_UDP) {
+            if (s->udp.state == UDP_ACTIVE) {
+                if (s->udp.version == 4) {
+                    inet_ntop(AF_INET, &s->udp.saddr.ip4, source, sizeof(source));
+                    inet_ntop(AF_INET, &s->udp.daddr.ip4, dest, sizeof(dest));
+                }
+                else {
+                    inet_ntop(AF_INET6, &s->udp.saddr.ip6, source, sizeof(source));
+                    inet_ntop(AF_INET6, &s->udp.daddr.ip6, dest, sizeof(dest));
+                }
+
+                jobject objPacket = create_packet(
+                        args, s->udp.version, IPPROTO_UDP, "",
+                        source, ntohs(s->udp.source), dest, ntohs(s->udp.dest), "", s->udp.uid, 0);
+                if (is_address_allowed(args, objPacket) == NULL) {
+                    s->udp.state = UDP_FINISHING;
+                    log_android(ANDROID_LOG_WARN, "UDP terminate session socket %d uid %d",
+                                s->socket, s->udp.uid);
+                }
             }
+            else if (s->udp.state == UDP_BLOCKED) {
+                log_android(ANDROID_LOG_WARN, "UDP remove blocked session uid %d", s->udp.uid);
+
+                if (l == NULL)
+                    ng_session = s->next;
+                else
+                    l->next = s->next;
+
+                struct ng_session *c = s;
+                s = s->next;
+                free(c);
+                continue;
+            }
+
+        } else if (s->protocol == IPPROTO_TCP) {
+            if (s->tcp.state != TCP_CLOSING && s->tcp.state != TCP_CLOSE) {
+                if (s->tcp.version == 4) {
+                    inet_ntop(AF_INET, &s->tcp.saddr.ip4, source, sizeof(source));
+                    inet_ntop(AF_INET, &s->tcp.daddr.ip4, dest, sizeof(dest));
+                }
+                else {
+                    inet_ntop(AF_INET6, &s->tcp.saddr.ip6, source, sizeof(source));
+                    inet_ntop(AF_INET6, &s->tcp.daddr.ip6, dest, sizeof(dest));
+                }
+
+                jobject objPacket = create_packet(
+                        args, s->tcp.version, IPPROTO_TCP, "",
+                        source, ntohs(s->tcp.source), dest, ntohs(s->tcp.dest), "", s->tcp.uid, 0);
+                if (is_address_allowed(args, objPacket) == NULL) {
+                    write_rst(args, &s->tcp);
+                    log_android(ANDROID_LOG_WARN, "TCP terminate socket %d uid %d",
+                                s->socket, s->tcp.uid);
+                }
+            }
+
         }
-        i = i->next;
-    }
 
-    struct udp_session *l = NULL;
-    struct udp_session *u = udp_session;
-    while (u != NULL) {
-        if (u->state == UDP_ACTIVE) {
-            if (u->version == 4) {
-                inet_ntop(AF_INET, &u->saddr.ip4, source, sizeof(source));
-                inet_ntop(AF_INET, &u->daddr.ip4, dest, sizeof(dest));
-            }
-            else {
-                inet_ntop(AF_INET6, &u->saddr.ip6, source, sizeof(source));
-                inet_ntop(AF_INET6, &u->daddr.ip6, dest, sizeof(dest));
-            }
-
-            jobject objPacket = create_packet(
-                    args, u->version, IPPROTO_UDP, "",
-                    source, ntohs(u->source), dest, ntohs(u->dest), "", u->uid, 0);
-            if (is_address_allowed(args, objPacket) == NULL) {
-                u->state = UDP_FINISHING;
-                log_android(ANDROID_LOG_WARN, "UDP terminate session socket %d uid %d",
-                            u->socket, u->uid);
-            }
-        }
-        else if (u->state == UDP_BLOCKED) {
-            log_android(ANDROID_LOG_WARN, "UDP remove blocked session uid %d", u->uid);
-
-            if (l == NULL)
-                udp_session = u->next;
-            else
-                l->next = u->next;
-
-            struct udp_session *c = u;
-            u = u->next;
-            free(c);
-            continue;
-        }
-        l = u;
-        u = u->next;
-    }
-
-    struct tcp_session *t = tcp_session;
-    while (t != NULL) {
-        if (t->state != TCP_CLOSING && t->state != TCP_CLOSE) {
-            if (t->version == 4) {
-                inet_ntop(AF_INET, &t->saddr.ip4, source, sizeof(source));
-                inet_ntop(AF_INET, &t->daddr.ip4, dest, sizeof(dest));
-            }
-            else {
-                inet_ntop(AF_INET6, &t->saddr.ip6, source, sizeof(source));
-                inet_ntop(AF_INET6, &t->daddr.ip6, dest, sizeof(dest));
-            }
-
-            jobject objPacket = create_packet(
-                    args, t->version, IPPROTO_TCP, "",
-                    source, ntohs(t->source), dest, ntohs(t->dest), "", t->uid, 0);
-            if (is_address_allowed(args, objPacket) == NULL) {
-                write_rst(args, t);
-                log_android(ANDROID_LOG_WARN, "TCP terminate socket %d uid %d",
-                            t->socket, t->uid);
-            }
-        }
-        t = t->next;
+        l = s;
+        s = s->next;
     }
 }
 

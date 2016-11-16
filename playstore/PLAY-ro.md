@@ -30,7 +30,6 @@ Caracteristici:
 &bull; 100% software cu sursa deschisa
 &bull; Nu transmite datele nicaieri
 &bull; Nu urmareste activitatea si nici nu o analizeaza
-&bull; Fara reclama
 &bull; Dezvoltare si asistenta continuua
 &bull; Suporta Android 4.0 si ulterior
 &bull; Suporta IPv4/IPv6 TCP/UDP
@@ -58,5 +57,7 @@ Pentru intrebari sau probleme puteti trimite un email la marcel+netguard@faircod
 Daca vrei sa ii ajuti pe cei ce nu vorbesc limba engleza, poti ajuta la traducerea NetGuard in limba ta materna: https://crowdin.com/project/netguard/
 
 Daca doriti sa testati caracteristile in dezvoltare ale aplicatiei, va puteti alatura programului de testare: https://play.google.com/apps/testing/eu.faircode.netguard
+
+Toate permisiunile necesare sunt detaliate aici: https://github.com/M66B/NetGuard/blob/master/FAQ.md#FAQ42
 
 Codul sursa este disponibil aici: https://github.com/M66B/NetGuard

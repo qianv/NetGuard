@@ -8,6 +8,9 @@
   <string name="app_first">开发者在开发和测试NetGuard过程中已悉心尽力,
 但开发者无法确保本软件在所有设备上均可正常运行.
 \n\n使用NetGuard即表明您接受 <a href="http://www.gnu.org/licenses/gpl.txt">GNU通用公共许可协议第三版</a></string>
+  <string name="app_admob">NetGuard 使用 Google AdMob 广告服务. 您可在此查阅 AdMob 隐私权政策 <a href="https://www.google.com/intl/en/policies/privacy/">here</a>.</string>
+  <string name="app_agree">同意</string>
+  <string name="app_disagree">拒绝</string>
   <string name="menu_search">搜索应用</string>
   <string name="menu_filter">筛选应用</string>
   <string name="menu_app_user">显示用户应用</string>
@@ -37,6 +40,7 @@
   <string name="menu_reset">重置</string>
   <string name="menu_add">添加</string>
   <string name="menu_delete">删除</string>
+  <string name="menu_cleanup">Cleanup</string>
   <string name="title_protocol">协议</string>
   <string name="title_dport">源端口</string>
   <string name="title_raddr">目标地址</string>
@@ -74,13 +78,20 @@
   <string name="setting_filter">过滤流量</string>
   <string name="setting_track_usage">跟踪网络使用记录</string>
   <string name="setting_reset_usage">重置网络使用记录</string>
+  <string name="setting_show_resolved">Show resolved domain names</string>
   <string name="setting_block_domains">屏蔽域名</string>
   <string name="setting_forwarding">端口转发</string>
   <string name="setting_vpn4">VPN IPv4: %s</string>
   <string name="setting_vpn6">VPN IPv6: %s</string>
   <string name="setting_dns">VPN DNS: %s</string>
+  <string name="setting_socks5_enabled">使用 SOCKS5 代理</string>
+  <string name="setting_socks5_addr">SOCKS5 地址: %s</string>
+  <string name="setting_socks5_port">SOCKS5 端口: %s</string>
+  <string name="setting_socks5_username">SOCKS5 用户名: %s</string>
+  <string name="setting_socks5_password">SOCKS5 密码: %s</string>
   <string name="setting_pcap_record_size">PCAP 记录大小: %s B</string>
   <string name="setting_pcap_file_size">PCAP 最大文件大小: %s MB</string>
+  <string name="setting_watchdog">监控: 每 %s 分钟</string>
   <string name="setting_stats_category">网速通知</string>
   <string name="setting_stats">显示网速通知</string>
   <string name="setting_stats_top">显示高网络流量应用</string>
@@ -116,7 +127,8 @@
   <string name="summary_filter">筛选经由 VPN 重定向导出的 IP 数据包. 这可能会导致额外电量消耗.</string>
   <string name="summary_track_usage">跟踪每个应用程序和地址发送和接收的字节数. 这可能会导致额外电量消耗.</string>
   <string name="summary_block_domains">对已阻止的主机域名使用\"域名错误\" (NXDOMAIN) 作为应答. 无 hosts 文件可用时此开关会被禁用.</string>
-  <string name="summary_proxy">SOCKS5 代理服务器 IP 地址及端口号</string>
+  <string name="summary_socks5_enabled">仅将 TCP 流量导向至代理服务器</string>
+  <string name="summary_watchdog">定时检查 NetGuard 运行状况 (输入 0 禁用此选项). 这可能导致额外电量消耗.</string>
   <string name="summary_stats">在状态栏通知中显示网速示意图</string>
   <string name="msg_sure">是否确认?</string>
   <string name="msg_started">规则加载中</string>
@@ -125,16 +137,17 @@
   <string name="msg_waiting">等待事件</string>
   <string name="msg_disabled">NetGuard已被停用, 请使用上方的开关启用NetGuard</string>
   <string name="msg_revoked">NetGuard已被停用, 可能是由于您启动了另一个基于VPN的应用</string>
-  <string name="msg_error">由于内部错误 NetGuard 已被禁用</string>
-  <string name="msg_start_failed">无法启动 Android VPN 服务, 这可能是由您所使用 Android 版本中的 bug 造成的.
-重启您的设备或从系统设置中撤销 NetGuard 的 VPN 权限 (如可行) 可能可以 (暂时) 修复此问题.</string>
   <string name="msg_installed">\'%1$s\' 已安装</string>
+  <string name="msg_installed_n">已安装</string>
   <string name="msg_access">%1$s 尝试进行网络连接</string>
+  <string name="msg_access_n">尝试的互联网访问</string>
   <string name="msg_completed">操作完成</string>
   <string name="msg_vpn">NetGuard 使用一个本地 VPN 对网络流量进行过滤.
 因此请在下一个对话框中允许建立网络连接.
 您的网络流量不会被导向任何远程 VPN 服务器.</string>
   <string name="msg_autostart">由于您使用的 Android 版本存在 bug, NetGuard 无法开机自启.</string>
+  <string name="msg_error">发生未知错误: \'%s\'</string>
+  <string name="msg_start_failed">Android refused to start the VPN service at this moment. This is likely because of a bug in your Android version.</string>
   <string name="msg_try">试用NetGuard</string>
   <string name="msg_terms">捐赠即表明您同意 <a href="http://www.netguard.me/#terms">条款与条件</a></string>
   <string name="msg_dimming">如果您在下一个对话框中无法点击确定, 可能是另一个应用正在控制屏幕(如屏幕亮度调节软件).</string>
@@ -147,7 +160,10 @@
   <string name="msg_count">%dx</string>
   <string name="msg_doze">为获得一致的使用效果, 请停用 Android 系统针对 NetGuard的电池优化.
 \n\nIn 在下一个对话框中, 选择上方的 \"所有应用\", 点击列表中的 NetGuard 并选择和确认 \"不要优化\".</string>
+  <string name="msg_datasaving">为保证一致性, 请为 NetGuard 禁用 Android 的流量控制功能
+\n\n请在下一个对话框中, 启用 \"后台数据\" 及 \"不限制数据使用\"</string>
   <string name="msg_filter">使用过滤功能将导致系统认为 NetGuard 使用了额外的电量和数据流量, 尽管这些使用量是由原应用所致.</string>
+  <string name="msg_filter4">Android 4 需启用过滤</string>
   <string name="msg_log_disabled">流量记录已禁用, 使用上方的开关以启用日志. 流量记录可能会导致额外电量消耗.</string>
   <string name="msg_clear_rules">此操作将重置所有规则和条件为默认值</string>
   <string name="msg_reset_access">此操作将删除访问尝试日志中无允许/阻止规则的记录</string>
@@ -160,6 +176,9 @@
   <string name="msg_metered">网络按流量计费</string>
   <string name="msg_queue">NetGuard 正忙</string>
   <string name="msg_update">有可用更新, 请点击下载</string>
+  <string name="msg_usage">您可以点击应用旁的图标来允许 (绿色) 或禁止 (红色) Wi-Fi 或移动网络连接</string>
+  <string name="msg_whitelist">默认允许网络连接, 可在设置中进行更改</string>
+  <string name="msg_push">大部分消息推送由作为系统组件的 Play 服务完成, 因此默认允许其进行网络连接</string>
   <string name="msg_system">您可在高级选项中启用管理系统应用</string>
   <string name="msg_issue">请具体描述问题及问题发生的时间:</string>
   <string name="title_unmetered_allowed">已允许非按流量计费的网络数据</string>
@@ -171,25 +190,27 @@
   <string name="title_interactive_allowed">亮屏时允许</string>
   <string name="title_roaming_blocked">漫游时阻止</string>
   <string name="title_metered">Wi-Fi 连接默认为非按流量计费, 移动数据连接默认为按流量计费</string>
+  <string name="title_internet">无网络访问权限</string>
+  <string name="title_disabled">已禁用</string>
   <string name="title_apply">应用规则和条件</string>
   <string name="title_conditions">条件</string>
   <string name="title_screen_wifi">亮屏时允许Wi-Fi网络</string>
   <string name="title_screen_other">亮屏时允许移动网络</string>
   <string name="title_roaming_symbol">R</string>
   <string name="title_roaming">漫游时阻止</string>
-  <string name="title_disabled">已禁用</string>
-  <string name="title_internet">无网络访问权限</string>
   <string name="title_related">筛选相关</string>
   <string name="title_access">访问尝试</string>
   <string name="title_no_log"><u>日志记录未启用</u></string>
+  <string name="title_no_filter"><u>过滤器未启用</u></string>
   <string name="title_precedence">访问规则优先于其他规则</string>
+  <string name="title_options">选项</string>
+  <string name="title_notify">发生网络访问尝试时通知我</string>
   <string name="title_rate">评分</string>
   <string name="title_allow">允许</string>
   <string name="title_block">阻止</string>
   <string name="title_root">root</string>
   <string name="title_mediaserver">mediaserver</string>
   <string name="title_nobody">没有人</string>
-  <string name="title_notify">发生网络访问尝试时通知我</string>
   <string name="title_dontask">下次不再询问</string>
   <string name="title_log_whois">Whois %1$s</string>
   <string name="title_log_port">端口 %1$d</string>
@@ -201,8 +222,11 @@
   <string name="title_pro_speed">网速示图通知</string>
   <string name="title_pro_theme">外观 (主题、 颜色)</string>
   <string name="title_pro_all">以上所有专业版功能</string>
-  <string name="title_pro_buy">详细信息</string>
+  <string name="title_pro_dev">支持应用开发</string>
+  <string name="title_pro_buy">购买</string>
   <string name="title_pro_bought">已启用</string>
+  <string name="title_pro_details">点击标题查看更多信息</string>
+  <string name="title_pro_ads">购买任何 pro 功能将禁用所有的广告</string>
   <string name="title_pro_challenge">验证口令</string>
   <string name="title_pro_reponse">验证应答</string>
   <string-array name="themeNames">

@@ -87,19 +87,12 @@ public class Receiver extends BroadcastReceiver {
 
             // Start service
             try {
-                if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-                    if (prefs.getBoolean("enabled", false) || prefs.getBoolean("show_stats", false))
-                        ServiceSinkhole.start("receiver", context);
-
-                } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
-                    if (prefs.getBoolean("enabled", false))
-                        ServiceSinkhole.start("receiver", context);
-                    else if (prefs.getBoolean("show_stats", false))
-                        ServiceSinkhole.run("receiver", context);
-                }
+                if (prefs.getBoolean("enabled", false))
+                    ServiceSinkhole.start("receiver", context);
+                else if (prefs.getBoolean("show_stats", false))
+                    ServiceSinkhole.run("receiver", context);
             } catch (Throwable ex) {
                 Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                Util.sendCrashReport(ex, context);
             }
 
             if (Util.isInteractive(context))
@@ -134,11 +127,16 @@ public class Receiver extends BroadcastReceiver {
             context.getTheme().resolveAttribute(R.attr.colorPrimary, tv, true);
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context)
                     .setSmallIcon(R.drawable.ic_security_white_24dp)
-                    .setContentTitle(context.getString(R.string.app_name))
-                    .setContentText(context.getString(R.string.msg_installed, name))
                     .setContentIntent(pi)
                     .setColor(tv.data)
                     .setAutoCancel(true);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                builder.setContentTitle(name)
+                        .setContentText(context.getString(R.string.msg_installed_n));
+            else
+                builder.setContentTitle(context.getString(R.string.app_name))
+                        .setContentText(context.getString(R.string.msg_installed, name));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 builder.setCategory(Notification.CATEGORY_STATUS)
@@ -185,7 +183,10 @@ public class Receiver extends BroadcastReceiver {
                 NotificationManagerCompat.from(context).notify(uid, builder.build());
             else {
                 NotificationCompat.BigTextStyle expanded = new NotificationCompat.BigTextStyle(builder);
-                expanded.bigText(context.getString(R.string.msg_installed, name));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                    expanded.bigText(context.getString(R.string.msg_installed_n));
+                else
+                    expanded.bigText(context.getString(R.string.msg_installed, name));
                 expanded.setSummaryText(context.getString(R.string.title_internet));
                 NotificationManagerCompat.from(context).notify(uid, expanded.build());
             }
@@ -237,6 +238,21 @@ public class Receiver extends BroadcastReceiver {
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP)
                 editor.putBoolean("filter", true); // Mandatory
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                editor.remove("show_top");
+                if ("data".equals(prefs.getString("sort", "name")))
+                    editor.remove("sort");
+            }
+
+            if (Util.isPlayStoreInstall(context)) {
+                editor.remove("update_check");
+                editor.remove("use_hosts");
+                editor.remove("hosts_url");
+            }
+
+            if (!Util.isDebuggable(context))
+                editor.remove("loglevel");
 
             editor.putInt("version", newVersion);
             editor.apply();

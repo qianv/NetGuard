@@ -8,6 +8,9 @@
   <string name="app_first">NetGuard sürekli gelişmekte ve yoğun bir şekilde test ediliyor,
 Buna rağmen bazı cihazlarda çalışmayabilir.
 \n\nNetGuard kullanarak, <a href="http://www.gnu.org/licenses/gpl.txt">Genel Kamu Lisansını (GNUv3) kabul etmiş sayılırsınız.</a></string>
+  <string name="app_admob">NetGuard uses Google\'s AdMob advertising service. AdMob\'s privacy policy is available <a href="https://www.google.com/intl/en/policies/privacy/">here</a>.</string>
+  <string name="app_agree">Kabul ediyorum</string>
+  <string name="app_disagree">Kabul etmiyorum</string>
   <string name="menu_search">Uygulama ara</string>
   <string name="menu_filter">Uygulama filtresi</string>
   <string name="menu_app_user">Kullanıcı uygulamalarını göster</string>
@@ -37,6 +40,7 @@ Buna rağmen bazı cihazlarda çalışmayabilir.
   <string name="menu_reset">Sıfırla</string>
   <string name="menu_add">Ekle</string>
   <string name="menu_delete">Sil</string>
+  <string name="menu_cleanup">Cleanup</string>
   <string name="title_protocol">Protokol</string>
   <string name="title_dport">Kaynak port</string>
   <string name="title_raddr">Hedef adres</string>
@@ -57,7 +61,7 @@ Buna rağmen bazı cihazlarda çalışmayabilir.
   <string name="setting_delay">Ekranın kapanmasını %1$s dakika ertele</string>
   <string name="setting_update">Güncellemeleri kontrol et</string>
   <string name="setting_network_options">Bağlantı seçenekleri</string>
-  <string name="setting_subnet">Subnet routing</string>
+  <string name="setting_subnet">Alt ağ yönlendirmesi</string>
   <string name="setting_tethering">İnternet paylaşımı aktif</string>
   <string name="setting_lan">Yerel ağ erişimine izin ver</string>
   <string name="setting_ip6">IPv6 trafiğini etkinleştir</string>
@@ -74,13 +78,20 @@ Buna rağmen bazı cihazlarda çalışmayabilir.
   <string name="setting_filter">Veri kullanımını filtrele</string>
   <string name="setting_track_usage">Veri kullanımını izle</string>
   <string name="setting_reset_usage">Veri kullanımını sıfırla</string>
+  <string name="setting_show_resolved">Show resolved domain names</string>
   <string name="setting_block_domains">Alan adını engelle</string>
   <string name="setting_forwarding">Port yönlendirme</string>
   <string name="setting_vpn4">VPN IPv4: %s</string>
   <string name="setting_vpn6">VPN IPv6: %s</string>
   <string name="setting_dns">VPN DNS: %s</string>
+  <string name="setting_socks5_enabled">SOCKS5 proxy kullan</string>
+  <string name="setting_socks5_addr">SOCKS5 adresi: %s</string>
+  <string name="setting_socks5_port">SOCKS5 bağlantı noktası: %s</string>
+  <string name="setting_socks5_username">SOCKS5 kullanıcı adı: %s</string>
+  <string name="setting_socks5_password">SOCKS5 şifre: %s</string>
   <string name="setting_pcap_record_size">PCAP kayıt boyutu: %s B</string>
   <string name="setting_pcap_file_size">PCAP max. dosya boyutu: %s MB</string>
+  <string name="setting_watchdog">Watchdog: every %s minutes</string>
   <string name="setting_stats_category">Hız bildirimi</string>
   <string name="setting_stats">Hız bildirimini göster</string>
   <string name="setting_stats_top">En iyi uygulamaları göster</string>
@@ -116,7 +127,8 @@ Buna rağmen bazı cihazlarda çalışmayabilir.
   <string name="summary_filter">IP paket filtresi VPN tünel üserinden çıkış yaptığı için ekstra batarya kullanımına neden olabilir.</string>
   <string name="summary_track_usage">Her bir uygulama için alınan ve gönderilen veri miktarını izleyin. Bu, ekstra batarya kullanımına neden olabilir.</string>
   <string name="summary_block_domains">Engellenen alan adları için \'name error\' (NXDOMAIN) ile yanıt ver. Hosts dosyası mevcut değilse bu ayarı aktifleştirmeyin.</string>
-  <string name="summary_proxy">SOCKS5 proxy sunucusu IP adresi ve port numarası</string>
+  <string name="summary_socks5_enabled">Only TCP traffic will be sent to the proxy server</string>
+  <string name="summary_watchdog">Periodically check if NetGuard is still running (enter zero to disable this option). This might result in extra battery usage.</string>
   <string name="summary_stats">İnternet hız grafiği bildirimi göster</string>
   <string name="msg_sure">Emin misiniz?</string>
   <string name="msg_started">Kuralları zorla</string>
@@ -125,16 +137,17 @@ Buna rağmen bazı cihazlarda çalışmayabilir.
   <string name="msg_waiting">Aktivite bekleniyor</string>
   <string name="msg_disabled">NetGuard devre dışı, NetGuard etkinleştirmek için yukarıdaki anahtarını kullanın.</string>
   <string name="msg_revoked">NetGuard, büyük olasılıkla başka bir VPN tabanlı uygulama kullanılarak devre dışı bırakıldı</string>
-  <string name="msg_error">NetGuard bur iç hata nedeniyle devre dışı bırakıldı</string>
-  <string name="msg_start_failed">Android VPN hizmeti, büyük ihtimalle Android sürümünden kaynaklı bir hata nedeniyle başlatılamadı.
-Cihazınızı yeniden başlatmayı yada (mümkünse) NetGuard ile gelen Android ayarlarında VPN izinlerini iptal etmek (geçici olarak) sorunu çözebilir.</string>
   <string name="msg_installed">\'%1$s\' yüklü</string>
+  <string name="msg_installed_n">Yüklendi</string>
   <string name="msg_access">%1$s internet erişimi deneniyor</string>
+  <string name="msg_access_n">Attempted internet access</string>
   <string name="msg_completed">Eylem tamamlandı</string>
   <string name="msg_vpn">NetGuard root gerektirmeden internet trafiğini filtreleyebilmek için yerel bir VPN sunucusu çalıştırır.
 Bu nedenle, bir sonraki iletişim kutusunda VPN bağlantı isteğine onay vermeniz gerekir.
 İnternet trafiğiniz uzak bir VPN sunucusuna gönderilmiyor.</string>
   <string name="msg_autostart">NetGuard, Android sürümünüzde ki bir hata nedeni ile başlanğıçta otomatik olarak başlatılamadı</string>
+  <string name="msg_error">Beklenmeyen hata oluştu: \'%s\'</string>
+  <string name="msg_start_failed">Android refused to start the VPN service at this moment. This is likely because of a bug in your Android version.</string>
   <string name="msg_try">NetGuard\'ı deneyin</string>
   <string name="msg_terms">Bağış yaparak <a href="http://www.netguard.me/#terms"> şartlar &amp; koşulları</a> kabul etmiş sayılırsınız</string>
   <string name="msg_dimming">Bir sonraki iletişim kutusunda TAMAM tuşuna basamıyorsanız muhtemelen buna başka bir uygulama neden oluyordur.</string>
@@ -147,7 +160,10 @@ Bu nedenle, bir sonraki iletişim kutusunda VPN bağlantı isteğine onay vermen
   <string name="msg_count">%dx</string>
   <string name="msg_doze">NetGuard için batarya optimizasyonu devre dışı bırakılarak tutarlı sonuçlar elde edilebilir
 \n\nBir sonraki iletişim kutusunda, \"Tüm uygulamaların\" arasından NetGuard için \"Optimize etme\" seçeneği onaylanmalı.</string>
+  <string name="msg_datasaving">For consistent results, the Android data saving options should be disabled for NetGuard
+\n\nIn the next dialog, enable the options \"Background data\" and \"Unrestricted data usage\"</string>
   <string name="msg_filter">NetGuard filtreleme kullanımı Android için veri ve güç kullanımında karmaşaya neden oluyormuş gibi görünebilir. Bazı durumlarda görünmeklede kalmaz</string>
+  <string name="msg_filter4">Android 4 requires filtering to be enabled</string>
   <string name="msg_log_disabled">Trafik günlüğünü etkinleştirmek için yukardaki anahtarı kullanın. Trafik günlüğünü etkinleştirmek ekstra batarya kullanımına neden olabilir.</string>
   <string name="msg_clear_rules">Bu, kuralları ve koşulları varsayılan değerle sıfırlar</string>
   <string name="msg_reset_access">Bu, izin verilen yada engelenen günlük kayıtları haricindeki erişim denemeleri ile ilgili satırları siler</string>
@@ -160,8 +176,11 @@ Bu nedenle, bir sonraki iletişim kutusunda VPN bağlantı isteğine onay vermen
   <string name="msg_metered">Bağlantı veri kullanımı</string>
   <string name="msg_queue">NetGuard meşgul</string>
   <string name="msg_update">Güncelleme hazır, indirmek için dokunun</string>
+  <string name="msg_usage">You can allow (greenish) or deny (reddish) Wi-Fi or mobile internet access to by tapping on the icons next to an application</string>
+  <string name="msg_whitelist">Varsayılan olarak, Internet erişim verilir Bu, ayarlarından değiştirilebilir</string>
+  <string name="msg_push">Incoming (push) messages are mostly handled by the system component Play services, which is allowed internet access by default</string>
   <string name="msg_system">Sistem uygulamalarını yönet gelişmiş seçenekler de etkin olabilir</string>
-  <string name="msg_issue">Please describe the problem and indicate the time of the problem:</string>
+  <string name="msg_issue">Lütfen sorunu açıklayan ve tarihi girin:</string>
   <string name="title_unmetered_allowed">İzin verilmiş hesaplanamayan veri kullanımı</string>
   <string name="title_unmetered_blocked">Engellenmiş hesaplanamayan veri kullanımı</string>
   <string name="title_metered_allowed">İzin verilmiş veri kullanımı</string>
@@ -171,25 +190,27 @@ Bu nedenle, bir sonraki iletişim kutusunda VPN bağlantı isteğine onay vermen
   <string name="title_interactive_allowed">Ekran açıkken izin verilen</string>
   <string name="title_roaming_blocked">Dolaşımdayken engellenen</string>
   <string name="title_metered">Varsayılan olarak Wi-Fi bağlantısının ölçümlenemediği kabul edilir ve mobil bağlantı verisi hesaplanır</string>
+  <string name="title_internet">İnternet izni yok</string>
+  <string name="title_disabled">devre dışı</string>
   <string name="title_apply">İzin verilmiş kurallar</string>
   <string name="title_conditions">Koşullar</string>
   <string name="title_screen_wifi">Ekran açıkken Wİ-Fİ ye izin ver</string>
   <string name="title_screen_other">Ekran açıkken mobile izin ver</string>
   <string name="title_roaming_symbol">R</string>
   <string name="title_roaming">Dolaşımda blokla</string>
-  <string name="title_disabled">devre dışı</string>
-  <string name="title_internet">İnternet izni yok</string>
   <string name="title_related">İlgili filtre</string>
   <string name="title_access">Erişim girişimleri</string>
   <string name="title_no_log"><u>Günlüğe kaydetme etkin değil</u></string>
+  <string name="title_no_filter"><u>Filtreleme etkin değil</u></string>
   <string name="title_precedence">Erişim kuralları diğer kurallara göre önceliklidir</string>
+  <string name="title_options">Seçenekler</string>
+  <string name="title_notify">İnternet erişim girişimlerini bildir</string>
   <string name="title_rate">Oyla</string>
   <string name="title_allow">İzin Ver</string>
   <string name="title_block">Engelle</string>
   <string name="title_root">root</string>
   <string name="title_mediaserver">mediaserver</string>
   <string name="title_nobody">hiçkimse</string>
-  <string name="title_notify">İnternet erişim girişimlerini bildir</string>
   <string name="title_dontask">Tekrar sorma</string>
   <string name="title_log_whois">Whois %1$s</string>
   <string name="title_log_port">Port %1$d</string>
@@ -201,8 +222,11 @@ Bu nedenle, bir sonraki iletişim kutusunda VPN bağlantı isteğine onay vermen
   <string name="title_pro_speed">Veri hızı grafiği bildirimi</string>
   <string name="title_pro_theme">Arayüz görünümü (tema ve renkler)</string>
   <string name="title_pro_all">Tüm Pro özellikler</string>
-  <string name="title_pro_buy">Ayrıntılar</string>
+  <string name="title_pro_dev">Geliştirmeyi destekle</string>
+  <string name="title_pro_buy">Satın al</string>
   <string name="title_pro_bought">Etkin</string>
+  <string name="title_pro_details">Daha fazla bilgi için başlığa dokunun</string>
+  <string name="title_pro_ads">Buying any pro feature will disable all advertisements</string>
   <string name="title_pro_challenge">Meydan okuma</string>
   <string name="title_pro_reponse">Yanıt</string>
   <string-array name="themeNames">

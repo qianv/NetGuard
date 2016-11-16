@@ -8,9 +8,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <poll.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/epoll.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -29,11 +31,12 @@
 
 #define TAG "NetGuard.JNI"
 
-// #define PROFILE_EVENTS 5
 // #define PROFILE_UID 5
 // #define PROFILE_JNI 5
 
-#define SELECT_TIMEOUT 3600 // seconds
+#define EPOLL_TIMEOUT 3600 // seconds
+#define EPOLL_EVENTS 20
+#define EPOLL_MIN_CHECK 100 // milliseconds
 
 #define ICMP4_MAXMSG (IP_MAXPACKET - 20 - 8) // bytes (socket)
 #define ICMP6_MAXMSG (IPV6_MAXPACKET - 40 - 8) // bytes (socket)
@@ -55,6 +58,12 @@
 #define UID_DELAY 1 // milliseconds
 #define UID_DELAYTRY 10 // milliseconds
 #define UID_MAXTRY 3
+
+#define SOCKS5_NONE 1
+#define SOCKS5_HELLO 2
+#define SOCKS5_AUTH 3
+#define SOCKS5_CONNECT 4
+#define SOCKS5_CONNECTED 5
 
 struct arguments {
     JNIEnv *env;
@@ -95,9 +104,6 @@ struct icmp_session {
     uint16_t id;
 
     uint8_t stop;
-    jint socket;
-
-    struct icmp_session *next;
 };
 
 #define UDP_ACTIVE 0
@@ -127,9 +133,6 @@ struct udp_session {
     __be16 dest; // network notation
 
     uint8_t state;
-    jint socket;
-
-    struct udp_session *next;
 };
 
 struct tcp_session {
@@ -148,6 +151,7 @@ struct tcp_session {
     uint32_t local_start;
 
     uint32_t acked; // host notation
+    long long last_keep_alive;
 
     uint64_t sent;
     uint64_t received;
@@ -165,10 +169,20 @@ struct tcp_session {
     __be16 dest; // network notation
 
     uint8_t state;
-    jint socket;
+    uint8_t socks5;
     struct segment *forward;
+};
 
-    struct tcp_session *next;
+struct ng_session {
+    uint8_t protocol;
+    union {
+        struct icmp_session icmp;
+        struct udp_session udp;
+        struct tcp_session tcp;
+    };
+    jint socket;
+    struct epoll_event ev;
+    struct ng_session *next;
 };
 
 // IPv6
@@ -296,13 +310,23 @@ void report_error(const struct arguments *args, jint error, const char *fmt, ...
 
 void check_allowed(const struct arguments *args);
 
-void check_icmp_sessions(const struct arguments *args, int sessions, int maxsessions);
+void init(const struct arguments *args);
 
-void check_udp_sessions(const struct arguments *args, int sessions, int maxsessions);
+void clear();
 
-void check_tcp_sessions(const struct arguments *args, int sessions, int maxsessions);
+int check_icmp_session(const struct arguments *args,
+                       struct ng_session *s,
+                       int sessions, int maxsessions);
 
-int get_select_timeout(int sessions, int maxsessions);
+int check_udp_session(const struct arguments *args,
+                      struct ng_session *s,
+                      int sessions, int maxsessions);
+
+int check_tcp_session(const struct arguments *args,
+                      struct ng_session *s,
+                      int sessions, int maxsessions);
+
+int monitor_tcp_session(const struct arguments *args, struct ng_session *s, int epoll_fd);
 
 int get_icmp_timeout(const struct icmp_session *u, int sessions, int maxsessions);
 
@@ -314,15 +338,14 @@ uint16_t get_mtu();
 
 uint16_t get_default_mss(int version);
 
-int get_selects(const struct arguments *args, fd_set *rfds, fd_set *wfds, fd_set *efds);
-
 int check_tun(const struct arguments *args,
-              fd_set *rfds, fd_set *wfds, fd_set *efds,
+              const struct epoll_event *ev,
+              const int epoll_fd,
               int sessions, int maxsessions);
 
-void check_icmp_sockets(const struct arguments *args, fd_set *rfds, fd_set *wfds, fd_set *efds);
+void check_icmp_socket(const struct arguments *args, const struct epoll_event *ev);
 
-void check_udp_sockets(const struct arguments *args, fd_set *rfds, fd_set *wfds, fd_set *efds);
+void check_udp_socket(const struct arguments *args, const struct epoll_event *ev);
 
 int32_t get_qname(const uint8_t *data, const size_t datalen, uint16_t off, char *qname);
 
@@ -330,11 +353,13 @@ void parse_dns_response(const struct arguments *args, const uint8_t *data, const
 
 uint32_t get_send_window(const struct tcp_session *cur);
 
-int get_receive_buffer(const struct tcp_session *cur);
+int get_receive_buffer(const struct ng_session *cur);
 
-uint32_t get_receive_window(const struct tcp_session *cur);
+uint32_t get_receive_window(const struct ng_session *cur);
 
-void check_tcp_sockets(const struct arguments *args, fd_set *rfds, fd_set *wfds, fd_set *efds);
+void check_tcp_socket(const struct arguments *args,
+                      const struct epoll_event *ev,
+                      const int epoll_fd);
 
 int is_lower_layer(int protocol);
 
@@ -342,24 +367,14 @@ int is_upper_layer(int protocol);
 
 void handle_ip(const struct arguments *args,
                const uint8_t *buffer, size_t length,
+               const int epoll_fd,
                int sessions, int maxsessions);
-
-void init_icmp(const struct arguments *args);
-
-void clear_icmp();
-
-int get_icmp_sessions();
 
 jboolean handle_icmp(const struct arguments *args,
                      const uint8_t *pkt, size_t length,
                      const uint8_t *payload,
-                     int uid);
-
-void init_udp(const struct arguments *args);
-
-void clear_udp();
-
-int get_udp_sessions();
+                     int uid,
+                     const int epoll_fd);
 
 int has_udp_session(const struct arguments *args, const uint8_t *pkt, const uint8_t *payload);
 
@@ -371,7 +386,8 @@ void block_udp(const struct arguments *args,
 jboolean handle_udp(const struct arguments *args,
                     const uint8_t *pkt, size_t length,
                     const uint8_t *payload,
-                    int uid, struct allowed *redirect);
+                    int uid, struct allowed *redirect,
+                    const int epoll_fd);
 
 int get_dns_query(const struct arguments *args, const struct udp_session *u,
                   const uint8_t *data, const size_t datalen,
@@ -384,18 +400,13 @@ int check_domain(const struct arguments *args, const struct udp_session *u,
 int check_dhcp(const struct arguments *args, const struct udp_session *u,
                const uint8_t *data, const size_t datalen);
 
-void init_tcp(const struct arguments *args);
-
-void clear_tcp();
-
 void clear_tcp_data(struct tcp_session *cur);
-
-int get_tcp_sessions();
 
 jboolean handle_tcp(const struct arguments *args,
                     const uint8_t *pkt, size_t length,
                     const uint8_t *payload,
-                    int uid, struct allowed *redirect);
+                    int uid, struct allowed *redirect,
+                    const int epoll_fd);
 
 void queue_tcp(const struct arguments *args,
                const struct tcphdr *tcphdr,
@@ -499,3 +510,9 @@ int compare_u32(uint32_t seq1, uint32_t seq2);
 const char *strstate(const int state);
 
 char *hex(const u_int8_t *data, const size_t len);
+
+int is_readable(int fd);
+
+int is_writable(int fd);
+
+long long get_ms();

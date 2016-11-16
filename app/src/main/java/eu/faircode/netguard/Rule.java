@@ -27,10 +27,12 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.XmlResourceParser;
 import android.net.TrafficStats;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Process;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.util.Log;
 
 import org.xmlpull.v1.XmlPullParser;
@@ -54,7 +56,9 @@ public class Rule {
     public boolean system;
     public boolean internet;
     public boolean enabled;
-    public Intent intent;
+    public Intent launch;
+    public Intent settings;
+    public Intent datasaver;
     public boolean pkg = true;
 
     public boolean wifi_default = false;
@@ -89,7 +93,9 @@ public class Rule {
     private static Map<String, Boolean> cacheSystem = new HashMap<>();
     private static Map<String, Boolean> cacheInternet = new HashMap<>();
     private static Map<PackageInfo, Boolean> cacheEnabled = new HashMap<>();
-    private static Map<String, Intent> cacheIntent = new HashMap<>();
+    private static Map<String, Intent> cacheIntentLaunch = new HashMap<>();
+    private static Map<String, Intent> cacheIntentSettings = new HashMap<>();
+    private static Map<String, Intent> cacheIntentDatasaver = new HashMap<>();
     private static Map<Integer, String[]> cachePackages = new HashMap<>();
 
     private static List<PackageInfo> getPackages(Context context) {
@@ -147,12 +153,42 @@ public class Rule {
         }
     }
 
-    private static Intent getIntent(String packageName, Context context) {
+    private static Intent getIntentLaunch(String packageName, Context context) {
         synchronized (context.getApplicationContext()) {
-            if (!cacheIntent.containsKey(packageName))
-                cacheIntent.put(packageName, context.getPackageManager().getLaunchIntentForPackage(packageName));
-            return cacheIntent.get(packageName);
+            if (!cacheIntentLaunch.containsKey(packageName))
+                cacheIntentLaunch.put(packageName, context.getPackageManager().getLaunchIntentForPackage(packageName));
+            return cacheIntentLaunch.get(packageName);
         }
+    }
+
+    private static Intent getIntentSettings(String packageName, Context context) {
+        synchronized (context.getApplicationContext()) {
+            if (!cacheIntentSettings.containsKey(packageName)) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + packageName));
+                if (intent.resolveActivity(context.getPackageManager()) == null)
+                    intent = null;
+                cacheIntentSettings.put(packageName, intent);
+            }
+            return cacheIntentSettings.get(packageName);
+        }
+    }
+
+    private static Intent getIntentDatasaver(String packageName, Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            synchronized (context.getApplicationContext()) {
+                if (!cacheIntentDatasaver.containsKey(packageName)) {
+                    Intent intent = new Intent(
+                            Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS,
+                            Uri.parse("package:" + packageName));
+                    if (intent.resolveActivity(context.getPackageManager()) == null)
+                        intent = null;
+                    cacheIntentDatasaver.put(packageName, intent);
+                }
+                return cacheIntentDatasaver.get(packageName);
+            }
+        else
+            return null;
     }
 
     private static String[] getPackages(int uid, Context context) {
@@ -172,7 +208,9 @@ public class Rule {
             cacheSystem.clear();
             cacheInternet.clear();
             cacheEnabled.clear();
-            cacheIntent.clear();
+            cacheIntentLaunch.clear();
+            cacheIntentSettings.clear();
+            cacheIntentDatasaver.clear();
             cachePackages.clear();
         }
     }
@@ -185,7 +223,9 @@ public class Rule {
             this.system = true;
             this.internet = true;
             this.enabled = true;
-            this.intent = null;
+            this.launch = null;
+            this.settings = null;
+            this.datasaver = null;
             this.pkg = false;
         } else if (info.applicationInfo.uid == 1013) {
             this.name = context.getString(R.string.title_mediaserver);
@@ -193,7 +233,9 @@ public class Rule {
             this.system = true;
             this.internet = true;
             this.enabled = true;
-            this.intent = null;
+            this.launch = null;
+            this.settings = null;
+            this.datasaver = null;
             this.pkg = false;
         } else if (info.applicationInfo.uid == 9999) {
             this.name = context.getString(R.string.title_nobody);
@@ -201,7 +243,9 @@ public class Rule {
             this.system = true;
             this.internet = true;
             this.enabled = true;
-            this.intent = null;
+            this.launch = null;
+            this.settings = null;
+            this.datasaver = null;
             this.pkg = false;
         } else {
             this.name = getLabel(info, context);
@@ -209,7 +253,9 @@ public class Rule {
             this.system = isSystem(info.packageName, context);
             this.internet = hasInternet(info.packageName, context);
             this.enabled = isEnabled(info, context);
-            this.intent = getIntent(info.packageName, context);
+            this.launch = getIntentLaunch(info.packageName, context);
+            this.settings = getIntentSettings(info.packageName, context);
+            this.datasaver = getIntentDatasaver(info.packageName, context);
         }
     }
 
@@ -276,7 +322,6 @@ public class Rule {
             }
         } catch (Throwable ex) {
             Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-            Util.sendCrashReport(ex, context);
         }
 
         // Build rule list
@@ -354,11 +399,16 @@ public class Rule {
                     }
                     rule.related = listPkg.toArray(new String[0]);
 
-                    long up = TrafficStats.getUidTxBytes(rule.info.applicationInfo.uid);
-                    long down = TrafficStats.getUidRxBytes(rule.info.applicationInfo.uid);
-                    rule.totalbytes = up + down;
-                    rule.upspeed = (float) up * 24 * 3600 * 1000 / 1024f / 1024f / now;
-                    rule.downspeed = (float) down * 24 * 3600 * 1000 / 1024f / 1024f / now;
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                        long up = TrafficStats.getUidTxBytes(rule.info.applicationInfo.uid);
+                        long down = TrafficStats.getUidRxBytes(rule.info.applicationInfo.uid);
+                        rule.totalbytes = up + down;
+                        rule.upspeed = (float) up * 24 * 3600 * 1000 / 1024f / 1024f / now;
+                        rule.downspeed = (float) down * 24 * 3600 * 1000 / 1024f / 1024f / now;
+                    } else {
+                        rule.upspeed = 0;
+                        rule.downspeed = 0;
+                    }
 
                     rule.updateChanged(default_wifi, default_other, default_roaming);
 

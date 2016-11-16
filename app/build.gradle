@@ -2,24 +2,11 @@ apply plugin: 'com.android.model.application'
 
 model {
     android {
-        compileSdkVersion = 23 // "android-N"
-        buildToolsVersion = "23.0.3" // "24.0.0 rc2"
+        compileSdkVersion = 25
+        buildToolsVersion = "25"
 
         defaultConfig {
             applicationId = "eu.faircode.netguard"
-            minSdkVersion.apiLevel = 14
-            targetSdkVersion.apiLevel = 23 // 24
-            versionCode = 2016051401
-            versionName = "2.25"
-            archivesBaseName = "NetGuard-v$versionName-$versionCode-sdk-$targetSdkVersion.apiLevel"
-
-            buildConfigFields {
-                create() {
-                    type "int"
-                    name "VALUE"
-                    value "1"
-                }
-            }
         }
 
         compileOptions.with {
@@ -68,6 +55,26 @@ model {
 
         productFlavors {
             create("all") {
+                versionName = "2.61"
+                minSdkVersion.apiLevel = 14
+                targetSdkVersion.apiLevel = 25
+                versionCode = 2016111401
+                archivesBaseName = "NetGuard-v$versionName"
+            }
+            create("lollipop-and-later") {
+                versionName = "2.61"
+                minSdkVersion.apiLevel = 20
+                targetSdkVersion.apiLevel = 25
+                versionCode = 2016111411
+                archivesBaseName = "NetGuard-v$versionName"
+            }
+            create("kitkat-and-earlier") {
+                versionName = "2.61"
+                minSdkVersion.apiLevel = 14
+                maxSdkVersion = 19
+                targetSdkVersion.apiLevel = 25
+                versionCode = 2016111421
+                archivesBaseName = "NetGuard-v$versionName"
             }
         }
     }
@@ -75,7 +82,11 @@ model {
 
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
-    compile 'com.android.support:appcompat-v7:23.2.+'
-    compile 'com.android.support:recyclerview-v7:23.2.+'
+    compile 'com.android.support:appcompat-v7:25.+'
+    compile 'com.android.support:recyclerview-v7:25.+'
     compile 'com.squareup.picasso:picasso:2.5.+'
+    compile 'com.google.firebase:firebase-core:9.2.+'
+    compile 'com.google.firebase:firebase-ads:9.2.+'
 }
+
+apply plugin: 'com.google.gms.google-services'

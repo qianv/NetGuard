@@ -21,6 +21,8 @@ package eu.faircode.netguard;
 
 import android.Manifest;
 import android.annotation.TargetApi;
+import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.ApplicationErrorReport;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -41,7 +43,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
-import android.provider.Settings;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.net.ConnectivityManagerCompat;
 import android.support.v7.app.AlertDialog;
 import android.telephony.SubscriptionInfo;
@@ -49,9 +51,13 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -60,12 +66,9 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
-import java.net.SocketException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -154,33 +157,7 @@ public class Util {
 
     public static boolean isInternational(Context context) {
         TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
-                && hasPhoneStatePermission(context)) {
-            int dataSubId;
-            try {
-                dataSubId = Settings.Global.getInt(context.getContentResolver(), "multi_sim_data_call", -1);
-            } catch (Throwable ignored) {
-                dataSubId = -1;
-            }
-            if (dataSubId >= 0) {
-                SubscriptionManager sm = SubscriptionManager.from(context);
-                SubscriptionInfo si = sm.getActiveSubscriptionInfo(dataSubId);
-                if (si != null && si.getCountryIso() != null)
-                    try {
-                        Method getNetworkCountryIso = tm.getClass().getMethod("getNetworkCountryIsoForSubscription", int.class);
-                        getNetworkCountryIso.setAccessible(true);
-                        String networkCountryIso = (String) getNetworkCountryIso.invoke(tm, dataSubId);
-                        Log.d(TAG, "SIM=" + si.getCountryIso() + " network=" + networkCountryIso);
-                        return !si.getCountryIso().equals(networkCountryIso);
-                    } catch (Throwable ex) {
-                        Log.w(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                        sendCrashReport(ex, context);
-                    }
-            }
-        }
-
-        return (tm == null || tm.getSimCountryIso() == null || !tm.getSimCountryIso().equals(tm.getNetworkCountryIso()));
+        return (tm != null && tm.getSimCountryIso() != null && !tm.getSimCountryIso().equals(tm.getNetworkCountryIso()));
     }
 
     public static String getNetworkGeneration(int networkType) {
@@ -286,12 +263,8 @@ public class Util {
         String dns1 = jni_getprop("net.dns1");
         String dns2 = jni_getprop("net.dns2");
         List<String> listDns = new ArrayList<>();
-        if (!TextUtils.isEmpty(dns1))
-            listDns.add(dns1);
-        if (!TextUtils.isEmpty(dns2))
-            listDns.add(dns2);
-        if (TextUtils.isEmpty(dns1) && TextUtils.isEmpty(dns2))
-            listDns.add("8.8.8.8");
+        listDns.add(TextUtils.isEmpty(dns1) ? "8.8.8.8" : dns1);
+        listDns.add(TextUtils.isEmpty(dns2) ? "8.8.4.4" : dns2);
         return listDns;
     }
 
@@ -405,7 +378,12 @@ public class Util {
         return "com.android.vending".equals(context.getPackageManager().getInstallerPackageName(context.getPackageName()));
     }
 
-    public static boolean hasValidFingerprint(Context context) {
+    public static boolean hasPlayServices(Context context) {
+        GoogleApiAvailability api = GoogleApiAvailability.getInstance();
+        return (api.isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS);
+    }
+
+    public static String getFingerprint(Context context) {
         try {
             PackageManager pm = context.getPackageManager();
             String pkg = context.getPackageName();
@@ -416,13 +394,17 @@ public class Util {
             StringBuilder sb = new StringBuilder();
             for (byte b : bytes)
                 sb.append(Integer.toString(b & 0xff, 16).toLowerCase());
-            String calculated = sb.toString();
-            String expected = context.getString(R.string.fingerprint);
-            return calculated.equals(expected);
+            return sb.toString();
         } catch (Throwable ex) {
             Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-            return false;
+            return null;
         }
+    }
+
+    public static boolean hasValidFingerprint(Context context) {
+        String calculated = getFingerprint(context);
+        String expected = context.getString(R.string.fingerprint);
+        return (calculated != null && calculated.equals(expected));
     }
 
     public static void setTheme(Context context) {
@@ -441,6 +423,12 @@ public class Util {
             context.setTheme(dark ? R.style.AppThemeOrangeDark : R.style.AppThemeOrange);
         else if (theme.equals("green"))
             context.setTheme(dark ? R.style.AppThemeGreenDark : R.style.AppThemeGreen);
+
+        if (context instanceof Activity && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            TypedValue tv = new TypedValue();
+            context.getTheme().resolveAttribute(R.attr.colorPrimary, tv, true);
+            ((Activity) context).setTaskDescription(new ActivityManager.TaskDescription(null, null, tv.data));
+        }
     }
 
     public static int dips2pixels(int dips, Context context) {
@@ -568,10 +556,19 @@ public class Util {
         }
     }
 
+    public static StringBuilder readString(InputStreamReader reader) {
+        StringBuilder sb = new StringBuilder(2048);
+        char[] read = new char[128];
+        try {
+            for (int i; (i = reader.read(read)) >= 0; sb.append(read, 0, i)) ;
+        } catch (Throwable ex) {
+            Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
+        }
+        return sb;
+    }
+
     public static void sendCrashReport(Throwable ex, final Context context) {
-        if (!isPlayStoreInstall(context))
-            return;
-        if (!(Util.isDebuggable(context) || Util.getSelfVersionName(context).contains("beta")))
+        if (!isPlayStoreInstall(context) || Util.isDebuggable(context))
             return;
 
         try {
@@ -619,21 +616,18 @@ public class Util {
         sb.append(String.format("Metered %B\r\n", isMeteredNetwork(context)));
         sb.append(String.format("Roaming %B\r\n", isRoaming(context)));
 
-        sb.append(String.format("Type %s\r\n", getPhoneTypeName(tm.getPhoneType())));
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1
-                || !hasPhoneStatePermission(context)) {
-            if (tm.getSimState() == TelephonyManager.SIM_STATE_READY)
-                sb.append(String.format("SIM %s/%s/%s\r\n", tm.getSimCountryIso(), tm.getSimOperatorName(), tm.getSimOperator()));
-            if (tm.getNetworkType() != TelephonyManager.NETWORK_TYPE_UNKNOWN)
-                sb.append(String.format("Network %s/%s/%s\r\n", tm.getNetworkCountryIso(), tm.getNetworkOperatorName(), tm.getNetworkOperator()));
-        }
+        if (tm.getSimState() == TelephonyManager.SIM_STATE_READY)
+            sb.append(String.format("SIM %s/%s/%s\r\n", tm.getSimCountryIso(), tm.getSimOperatorName(), tm.getSimOperator()));
+        if (tm.getNetworkType() != TelephonyManager.NETWORK_TYPE_UNKNOWN)
+            sb.append(String.format("Network %s/%s/%s\r\n", tm.getNetworkCountryIso(), tm.getNetworkOperatorName(), tm.getNetworkOperator()));
 
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
             sb.append(String.format("Power saving %B\r\n", pm.isPowerSaveMode()));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            sb.append(String.format("Battery optimizing %B\r\n", !pm.isIgnoringBatteryOptimizations(context.getPackageName())));
+            sb.append(String.format("Battery optimizing %B\r\n", batteryOptimizing(context)));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            sb.append(String.format("Data saving %B\r\n", dataSaving(context)));
 
         if (sb.length() > 2)
             sb.setLength(sb.length() - 2);
@@ -669,11 +663,10 @@ public class Util {
 
         try {
             Enumeration<NetworkInterface> nis = NetworkInterface.getNetworkInterfaces();
-            if (nis != null) {
-                sb.append("\r\n");
+            if (nis != null)
                 while (nis.hasMoreElements()) {
                     NetworkInterface ni = nis.nextElement();
-                    if (ni != null) {
+                    if (ni != null && !"lo".equals(ni.getName())) {
                         List<InterfaceAddress> ias = ni.getInterfaceAddresses();
                         if (ias != null)
                             for (InterfaceAddress ia : ias)
@@ -684,7 +677,6 @@ public class Util {
                                         .append("\r\n");
                     }
                 }
-            }
         } catch (Throwable ex) {
             sb.append(ex.toString()).append("\r\n");
         }
@@ -693,6 +685,18 @@ public class Util {
             sb.setLength(sb.length() - 2);
 
         return sb.toString();
+    }
+
+    @TargetApi(Build.VERSION_CODES.M)
+    public static boolean batteryOptimizing(Context context) {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return !pm.isIgnoringBatteryOptimizations(context.getPackageName());
+    }
+
+    @TargetApi(Build.VERSION_CODES.N)
+    public static boolean dataSaving(Context context) {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        return (cm.getRestrictBackgroundStatus() == ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP_MR1)
@@ -704,7 +708,6 @@ public class Util {
 
         StringBuilder sb = new StringBuilder();
         SubscriptionManager sm = SubscriptionManager.from(context);
-        TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
 
         sb.append("Slots ")
                 .append(sm.getActiveSubscriptionInfoCount())
@@ -712,34 +715,17 @@ public class Util {
                 .append(sm.getActiveSubscriptionInfoCountMax())
                 .append("\r\n");
 
-        int dataSubId;
-        try {
-            dataSubId = Settings.Global.getInt(context.getContentResolver(), "multi_sim_data_call", -1);
-        } catch (Throwable ignored) {
-            dataSubId = -1;
-        }
+        int dataid = -1;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            dataid = sm.getDefaultDataSubscriptionId();
 
-        Method getNetworkCountryIso = null;
-        Method getNetworkOperator = null;
-        Method getNetworkOperatorName = null;
-        Method getDataEnabled = null;
-        try {
-            getNetworkCountryIso = tm.getClass().getMethod("getNetworkCountryIsoForSubscription", int.class);
-            getNetworkOperator = tm.getClass().getMethod("getNetworkOperatorForSubscription", int.class);
-            getNetworkOperatorName = tm.getClass().getMethod("getNetworkOperatorName", int.class);
-            getDataEnabled = tm.getClass().getMethod("getDataEnabled", int.class);
-
-            getNetworkCountryIso.setAccessible(true);
-            getNetworkOperator.setAccessible(true);
-            getNetworkOperatorName.setAccessible(true);
-            getDataEnabled.setAccessible(true);
-        } catch (NoSuchMethodException ex) {
-            Log.w(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-        }
+        int voiceid = -1;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            voiceid = sm.getDefaultVoiceSubscriptionId();
 
         List<SubscriptionInfo> subscriptions = sm.getActiveSubscriptionInfoList();
         if (subscriptions != null)
-            for (SubscriptionInfo si : subscriptions) {
+            for (SubscriptionInfo si : subscriptions)
                 sb.append("SIM ")
                         .append(si.getSimSlotIndex() + 1)
                         .append('/')
@@ -750,32 +736,10 @@ public class Util {
                         .append(si.getMcc()).append(si.getMnc())
                         .append(' ')
                         .append(si.getCarrierName())
+                        .append(si.getSubscriptionId() == dataid ? " D" : "")
+                        .append(si.getSubscriptionId() == voiceid ? " V" : "")
                         .append(si.getDataRoaming() == SubscriptionManager.DATA_ROAMING_ENABLE ? " R" : "")
-                        .append(si.getSubscriptionId() == dataSubId ? " *" : "")
                         .append("\r\n");
-                if (getNetworkCountryIso != null &&
-                        getNetworkOperator != null &&
-                        getNetworkOperatorName != null &&
-                        getDataEnabled != null)
-                    try {
-                        sb.append("Network ")
-                                .append(si.getSimSlotIndex() + 1)
-                                .append('/')
-                                .append(si.getSubscriptionId())
-                                .append(' ')
-                                .append(getNetworkCountryIso.invoke(tm, si.getSubscriptionId()))
-                                .append('/')
-                                .append(getNetworkOperator.invoke(tm, si.getSubscriptionId()))
-                                .append(' ')
-                                .append(getNetworkOperatorName.invoke(tm, si.getSubscriptionId()))
-                                .append(sm.isNetworkRoaming(si.getSubscriptionId()) ? " R" : "")
-                                .append(' ')
-                                .append(String.format("%B", getDataEnabled.invoke(tm, si.getSubscriptionId())))
-                                .append("\r\n");
-                    } catch (IllegalAccessException | InvocationTargetException ex) {
-                        Log.w(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                    }
-            }
 
         if (sb.length() > 2)
             sb.setLength(sb.length() - 2);
